@@ -1,0 +1,69 @@
+# 动作系统定义（非敏感，可入库）
+# 动作系统独立于皮肤：不同皮肤共用同一套动作定义，只是帧图不同
+#
+# 动作类型：
+#   sprite_sheet  - 帧动画（按 frames 索引切换 PetImage.Source）
+#   procedural    - 程序化动画（驱动 BreathScale / BobTranslate）
+
+animations:
+  # === 待机循环（默认状态）===
+  idle:
+    type: sprite_sheet
+    interval_ms: 3000           # 眨眼间隔
+    frames: [0, 1]              # 帧 0（睁眼）↔ 帧 1（闭眼）
+
+  breath:
+    type: procedural
+    target: scale_y             # 驱动 BreathScale.ScaleY
+    from: 1.0
+    to: 1.03
+    duration_s: 2.0
+    auto_reverse: true
+
+  float:
+    type: procedural
+    target: translate_y         # 驱动 BobTranslate.Y
+    from: 0
+    to: -3
+    duration_s: 2.0
+    auto_reverse: true
+
+  # === 拖拽 ===
+  drag:
+    type: procedural
+    target: scale
+    scale_x: 0.96
+    scale_y: 1.08
+    duration_ms: 120
+
+  # === 互动动作（一次性）===
+  pat:                          # 抚摸：眨眼两次
+    type: sprite_sheet
+    frames: [0, 1, 0, 1, 0]
+    interval_ms: 200
+    repeat: 1
+
+  highfive:                     # 击掌：跳跃
+    type: procedural
+    target: translate_y
+    from: 0
+    to: -15
+    duration_ms: 200
+    auto_reverse: true
+
+  feed:                         # 喂食：眯眼 1 秒
+    type: sprite_sheet
+    frames: [1]
+    duration_ms: 1000
+    repeat: 1
+
+  # === 状态动作（持续循环）===
+  hungry:                       # 饥饿：持续闭眼
+    type: sprite_sheet
+    frames: [1]
+    repeat: forever
+
+  sleep:                        # 睡眠：长时间无互动
+    type: sprite_sheet
+    frames: [1]
+    repeat: forever

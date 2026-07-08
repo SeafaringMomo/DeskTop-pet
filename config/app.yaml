@@ -1,0 +1,21 @@
+# 应用级常量（非敏感，可入库）
+# 修改这些值可调整动画节奏、精灵图切分、窗口边距等行为
+
+audio: true              # 是否启用人物语音
+bg_music: true           # 是否播放当前角色的背景音乐
+static_path: static      # 静态资源根目录（相对项目根）
+
+# 精灵图（Sprite Sheet）配置
+sprite:
+  file: sheet.png        # 精灵图文件名
+  cols: 2                # 列数（横向帧数）
+  rows: 1                # 行数（纵向帧数）
+
+# 动画参数
+animation:
+  blink_interval_ms: 3000   # 眨眼间隔毫秒
+  default_scale: 0.4        # 默认缩放比例（基础尺寸 300px × 0.4 = 120px 显示）
+
+# 窗口定位
+window:
+  edge_margin: 20        # 距屏幕边缘的留白像素

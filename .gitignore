@@ -1,0 +1,33 @@
+# ===== 构建产物 =====
+bin/
+obj/
+*.user
+*.suo
+.vs/
+
+# ===== 用户数据（运行时生成，不入库）=====
+# 日志、待办数据库、用户配置、对话记录、用户档案
+user_data/logs/
+user_data/data/
+user_data/config_pet.yaml
+user_data/users/
+user_data/users.yaml
+
+# ===== 敏感配置（含 API_KEY，不入库）=====
+# secrets.yaml 含 AI 提供方的 API_KEY 与 MCP 服务器地址
+# 提供 secrets.yaml.example 作为模板
+config/secrets.yaml
+
+# ===== 静态媒体资源（体积大，不入库；由用户自行放入或代码生成）=====
+# 像素图由代码运行时生成到 static/<角色>/，已生成的不入库（避免频繁变动的二进制）
+# 用户放入的真实图片/音乐也不入库
+static/**/*.png
+static/**/*.mp3
+static/**/*.wav
+static/**/*.ogg
+# 但保留目录结构占位
+!static/**/.gitkeep
+
+# ===== IDE =====
+.idea/
+*.swp

@@ -1,0 +1,60 @@
+# 宠物管理系统常量配置（非敏感，可入库）
+# 集中管理皮肤价格、衰减规则、奖励值、冷却时间、好感度等级等常量
+
+# 常量
+constants:
+  skin_price: 400              # 皮肤价格（金币）
+  food_default_price: 20       # 食物默认价格
+  initial_coins: 100           # 新用户初始金币
+  initial_affinity: 50         # 初始好感度
+  initial_satiety: 50          # 初始饱食度
+
+# 衰减规则
+decay:
+  satiety_loss_per_6h: 10            # 饱食度每 6 小时 -10
+  affinity_loss_per_day: 2           # 好感度每日 -2（无互动）
+  satiety_low_threshold: 20          # 饱食度低阈值
+  satiety_low_affinity_loss_minutes: 120  # 饱食度<20 持续 2 小时扣 1 好感度
+  muted_affinity_loss_per_hour: 1    # 静音状态每小时 -1
+
+# 好感度奖励
+rewards:
+  feed_loved: 8                # 喂食喜欢 +8
+  feed_normal: 5               # 喂食普通 +5
+  feed_disliked: 1             # 喂食讨厌 +1
+  pat: 1                       # 抚摸 +1
+  highfive: 2                  # 击掌 +2
+  chat_per_message: 1          # 聊天 +1
+  todo_complete: 2             # 完成待办 +2
+  idle_per_hour: 1             # 挂机每小时 +1
+  satiety_high_bonus: 1.2      # 饱食度>80 时互动好感度加成
+
+# 冷却（秒）
+cooldown:
+  feed: 5
+  pat: 5
+  highfive: 30
+  play: 300
+
+# 好感度等级（从高到低匹配，第一个满足 min 的等级生效）
+levels:
+  - min: 80
+    name: 挚友
+    skin_discount: 0.7
+    description: 专属台词
+  - min: 60
+    name: 亲密
+    skin_discount: 0.8
+    description: 表达亲近
+  - min: 40
+    name: 友好
+    skin_discount: 0.9
+    description: 主动关心
+  - min: 20
+    name: 认识
+    skin_discount: 0.95
+    description: 偶尔热情
+  - min: 0
+    name: 陌生人
+    skin_discount: 1.0
+    description: 冷淡称呼

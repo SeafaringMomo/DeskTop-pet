@@ -1,0 +1,119 @@
+using System.Text.Json.Nodes;
+using System.Threading;
+using System.Threading.Tasks;
+using DesktopPetCSharp.Services.AI;
+using DesktopPetCSharp.Services.MCP;
+
+namespace DesktopPetCSharp.Services;
+
+/// <summary>
+/// 聊天编排器：在 <see cref="IAiProvider"/> 与 <see cref="McpManager"/> 之间执行多轮对话 + 工具调用循环。
+/// 这是替代旧 <c>IChatService</c> 的高层 API：UI 只需调用 <see cref="TalkAsync"/>。
+///
+/// 工作流：
+/// 1. 从注册表取默认 IAiProvider；若不支持工具调用或没有 MCP 工具，直接单轮对话返回。
+/// 2. 否则把 MCP 工具列表传给提供方，若模型请求工具，则通过 McpManager 执行并把结果回传，
+///    最多循环 <see cref="MaxToolRounds"/> 次以避免死循环。
+/// </summary>
+public sealed class ChatOrchestrator
+{
+    /// <summary>单次会话允许的最大工具调用轮数。</summary>
+    public int MaxToolRounds { get; set; } = 6;
+
+    /// <summary>
+    /// 系统提示（角色设定）。默认根据配置文件中的主角名动态生成，
+    /// 这样用户替换像素图、改 role 后，AI 在线模型也会跟着切换角色身份。
+    /// </summary>
+    public string SystemPrompt { get; set; } = BuildDefaultSystemPrompt();
+
+    private static string BuildDefaultSystemPrompt()
+    {
+        var role = "路飞";
+        try { role = ConfigService.Load().Role; } catch { /* 配置读取失败用默认 */ }
+        var hint = "";
+        try { hint = Services.AffinityService.Instance.GetSystemPromptHint(role); } catch { /* 未登录时忽略 */ }
+        return
+            $"你是桌面宠物『{role}』。回答要活泼可爱、保持角色一致性，使用中文。" +
+            "如果有需要，可以借助工具帮用户管理待办事项。" +
+            hint;
+    }
+
+    private readonly List<ChatMessage> _history = new();
+
+    /// <summary>历史对话快照（只读）。</summary>
+    public IReadOnlyList<ChatMessage> History => _history;
+
+    /// <summary>清空对话历史。</summary>
+    public void ResetHistory() => _history.Clear();
+
+    /// <summary>发送一条用户消息并返回最终回复。</summary>
+    public async Task<string> TalkAsync(string userMessage, CancellationToken ct = default)
+    {
+        var provider = AiProviderRegistry.Instance.Default
+            ?? throw new InvalidOperationException("没有可用的 AI 提供方，请先注册一个。");
+
+        // 加入历史（用户消息）
+        _history.Add(new ChatMessage { Role = "user", Content = userMessage });
+
+        // 取所有 MCP 工具
+        var tools = provider.SupportsToolCalling
+            ? await McpManager.Instance.ListAllToolsAsync(ct).ConfigureAwait(false)
+            : Array.Empty<ToolDefinition>();
+
+        var request = new AiRequest
+        {
+            SystemPrompt = SystemPrompt,
+            History = _history.Take(_history.Count - 1).ToList(),
+            UserMessage = userMessage,
+            Tools = tools
+        };
+
+        for (int round = 0; round <= MaxToolRounds; round++)
+        {
+            var resp = await provider.ChatAsync(request, ct).ConfigureAwait(false);
+
+            // 模型没有请求工具调用 → 直接返回文本
+            if (!resp.HasToolCalls || !provider.SupportsToolCalling)
+            {
+                _history.Add(new ChatMessage { Role = "assistant", Content = resp.Content });
+                return resp.Content;
+            }
+
+            // 1) 把助手的工具调用消息追加进历史
+            _history.Add(new ChatMessage { Role = "assistant", Content = resp.Content });
+            // 注：OpenAI 协议里 tool_calls 是结构化字段，这里简化为序列化文本，便于本地历史展示
+            request.History = _history.ToList();
+
+            // 2) 逐个执行工具，把结果作为 tool 角色消息回传
+            foreach (var call in resp.ToolCalls)
+            {
+                JsonNode? argsNode = null;
+                try { argsNode = string.IsNullOrEmpty(call.ArgumentsJson) ? null : JsonNode.Parse(call.ArgumentsJson); }
+                catch { /* 参数解析失败按空对象处理 */ }
+
+                Logger.Info("Chat", $"调用工具 {call.Name}，参数={call.ArgumentsJson}");
+                var result = await McpManager.Instance.InvokeToolAsync(call.Name, argsNode, ct).ConfigureAwait(false);
+                Logger.Info("Chat", $"工具 {call.Name} 返回：{(result.IsError ? "[错误] " : "")}{result.Content}");
+                _history.Add(new ChatMessage
+                {
+                    Role = "tool",
+                    Content = result.Content,
+                    ToolCallId = call.Id,
+                    ToolName = call.Name
+                });
+
+                request.History = _history.ToList();
+            }
+
+            // 3) 进入下一轮：让模型基于工具结果继续生成
+            // 此时 userMessage 仍为最初输入，但模型会读取历史里的 tool 结果
+            request.UserMessage = "请根据工具返回结果继续回答。";
+        }
+
+        // 达到最大轮数仍未结束
+        const string fallback = "（处理了好多步还是没搞明白…能换个说法再问一次吗？）";
+        _history.Add(new ChatMessage { Role = "assistant", Content = fallback });
+        Logger.Warn("Chat", $"达到最大工具调用轮数 {MaxToolRounds}，返回兜底回复");
+        return fallback;
+    }
+}

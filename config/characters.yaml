@@ -1,0 +1,37 @@
+# 角色定义（非敏感，可入库）
+# 包含：角色映射、配色主题、各角色动画参数
+
+default_role: 路飞       # 默认角色（首次启动且无用户偏好时使用）
+
+# 角色中文名 → 英文目录名映射
+# 英文目录名决定 static/ 下的子目录（如 路飞 → static/luffy/）
+roles:
+  路飞: luffy
+  索隆: zoro
+
+# 各角色动画参数：[眨眼帧时长(ms), 缩放比例]
+frame_scale:
+  路飞:
+  - 150
+  - 0.4
+  索隆:
+  - 150
+  - 0.4
+
+# 角色配色主题（与角色绑定，切换角色即切换配色）
+# 应用于：聊天窗、待办窗、右键菜单、模型设置窗
+themes:
+  路飞:
+    primary: "#F5D547"      # 草帽黄
+    accent: "#E74C3C"       # 红色（帽带）
+    background: "#3D2817"   # 深棕
+    surface: "#5C3A1E"      # 中棕
+    text: "#FFF3D9"         # 米白
+    border: "#F5D547"
+  索隆:
+    primary: "#3A7D3A"      # 深绿（索隆绿发）
+    accent: "#8B4513"       # 棕色（刀鞘）
+    background: "#1A2E1A"   # 深绿黑
+    surface: "#2A3F2A"
+    text: "#D9E8D9"
+    border: "#3A7D3A"
