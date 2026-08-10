@@ -19,4 +19,10 @@
     <PackageReference Include="YamlDotNet" Version="15.3.0" />
   </ItemGroup>
 
+  <!-- 排除测试目录，避免被主项目通配符编译 -->
+  <ItemGroup>
+    <Compile Remove="DesktopPetCSharp.Tests\**" />
+    <None Remove="DesktopPetCSharp.Tests\**" />
+  </ItemGroup>
+
 </Project>

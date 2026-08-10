@@ -16,8 +16,12 @@ public class ChatMessageRecord
     public string Content { get; set; } = "";
     /// <summary>消息时间戳（ISO 8601）</summary>
     public string Timestamp { get; set; } = "";
-    /// <summary>工具调用详情（JSON，可空）</summary>
+    /// <summary>assistant 消息携带的 tool_calls JSON 数组（OpenAI 协议），可空</summary>
     public string? ToolCalls { get; set; }
+    /// <summary>tool 角色消息对应的调用 ID（OpenAI 协议 tool_call_id），可空</summary>
+    public string? ToolCallId { get; set; }
+    /// <summary>tool 角色消息对应的工具名，可空</summary>
+    public string? ToolName { get; set; }
 }
 
 /// <summary>

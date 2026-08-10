@@ -87,7 +87,7 @@ public sealed class UserService
         var s = new SerializerBuilder()
             .WithNamingConvention(NullNamingConvention.Instance)
             .Build();
-        File.WriteAllText(RegistryPath, s.Serialize(registry));
+        AtomicWrite(RegistryPath, s.Serialize(registry));
     }
 
     // ===== 用户创建/登录 =====
@@ -220,7 +220,19 @@ public sealed class UserService
         var s = new SerializerBuilder()
             .WithNamingConvention(NullNamingConvention.Instance)
             .Build();
-        File.WriteAllText(path, s.Serialize(profile));
+        AtomicWrite(path, s.Serialize(profile));
+    }
+
+    /// <summary>
+    /// 原子写入文件：先写到 &lt;path&gt;.tmp，再 Move 到目标路径（覆盖）。
+    /// 避免写入过程中崩溃导致文件损坏（对应 AGENTS.md §4.2 并发与崩溃安全）。
+    /// </summary>
+    private static void AtomicWrite(string path, string content)
+    {
+        var tmp = path + ".tmp";
+        File.WriteAllText(tmp, content);
+        // File.Move with overwrite=true 在同一卷上是原子的（Windows 上保证）
+        File.Move(tmp, path, overwrite: true);
     }
 
     /// <summary>保存当前用户的档案（若已登录）。</summary>

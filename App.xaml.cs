@@ -17,8 +17,10 @@ namespace DesktopPetCSharp;
 public partial class App : Application
 {
     /// <summary>
-    /// 项目根目录（含 .csproj 与 static/、config/）。
-    /// 优先环境变量 DESKTOP_PET_BASE，否则从可执行文件向上查找含 .csproj 的目录。
+    /// 应用程序入口。
+    /// 目录结构：
+    /// - BaseDir：项目根（含 .csproj），存放 static/（静态资源）和 config/（默认配置模板）
+    /// - UserDataDir：项目根 user_data/，存放运行时生成的用户数据（日志、待办数据库、用户配置）
     /// </summary>
     public static string BaseDir { get; } = ResolveBaseDir();
 
@@ -38,6 +40,68 @@ public partial class App : Application
 
     /// <summary>全局静音开关。为 true 时：背景音乐不播放、音效不播放、TTS 不朗读。</summary>
     public static bool IsMuted { get; set; }
+
+    /// <summary>
+    /// 单实例 Mutex 引用。保持存活以防止被 GC 提前释放（对应 AGENTS.md §4.2）。
+    /// </summary>
+    private static Mutex? _singleInstanceMutex;
+
+    /// <summary>
+    /// App 构造函数：注册全局异常兜底处理器。
+    /// 必须在 OnStartup 之前注册，保证启动期间的异常也能被捕获。
+    /// </summary>
+    public App()
+    {
+        // 1) WPF UI 线程未处理异常
+        DispatcherUnhandledException += OnDispatcherUnhandledException;
+
+        // 2) 非 UI 线程（包括原生线程）未处理异常
+        AppDomain.CurrentDomain.UnhandledException += OnAppDomainUnhandledException;
+
+        // 3) 未观察的 Task 异常（async void / 未 await 的任务抛错）
+        TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
+    }
+
+    /// <summary>
+    /// UI 线程异常兜底：记录日志并提示用户。
+    /// 设置 e.Handled = true 防止应用崩溃。
+    /// </summary>
+    private void OnDispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
+    {
+        try
+        {
+            Logger.Error("App", "UI 线程未处理异常", e.Exception);
+            MessageBox.Show($"发生未处理异常：{e.Exception.Message}\n\n详细信息已记录到日志。",
+                "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        catch { /* 异常处理失败也不让应用崩溃 */ }
+        e.Handled = true;
+    }
+
+    /// <summary>非 UI 线程异常兜底：仅记录日志，无法阻止应用终止。</summary>
+    private void OnAppDomainUnhandledException(object sender, UnhandledExceptionEventArgs e)
+    {
+        try
+        {
+            var ex = e.ExceptionObject as Exception;
+            if (ex != null)
+                Logger.Error("App", $"非 UI 线程未处理异常（IsTerminating={e.IsTerminating}）", ex);
+            else
+                Logger.Error("App", $"非 UI 线程未处理异常（IsTerminating={e.IsTerminating}）：{e.ExceptionObject}");
+        }
+        catch { }
+    }
+
+    /// <summary>未观察 Task 异常兜底：标记为已观察防止应用崩溃。</summary>
+    private void OnUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
+    {
+        try
+        {
+            Logger.Error("App", "未观察的 Task 异常", e.Exception);
+        }
+        catch { }
+        e.SetObserved();
+    }
 
     private static string ResolveBaseDir()
     {
@@ -84,6 +148,15 @@ public partial class App : Application
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        // 0) 单实例检测：若已有实例运行则提示后退出（对应 AGENTS.md §4.2 并发限制）
+        if (!SingleInstance.TryAcquire(out _singleInstanceMutex))
+        {
+            MessageBox.Show("桌面宠物已经在运行中，请勿重复启动。",
+                "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            Shutdown();
+            return;
+        }
 
         // 1) 初始化日志系统（最先做，后续步骤都可被记录）
         Logger.Init(UserDataDir);
@@ -275,10 +348,45 @@ public partial class App : Application
                     Logger.Warn("App", $"未实现的 local MCP 服务器：{s.Name}（仅支持 local-todo）");
                 }
             }
-            else if (s.Type == "stdio" || s.Type == "sse")
+            else if (s.Type == "stdio")
             {
-                // 预留接口：stdio/sse 客户端尚未实现
-                Logger.Warn("App", $"MCP 服务器类型 {s.Type}（{s.Name}）暂未实现，跳过注册");
+                if (string.IsNullOrWhiteSpace(s.Command))
+                {
+                    Logger.Warn("App", $"跳过 MCP 服务器 {s.Name}：command 为空");
+                    continue;
+                }
+                try
+                {
+                    var stdio = new StdioMcpServer(s.Name, s.Command, s.Args);
+                    await stdio.InitializeAsync();
+                    await McpManager.Instance.RegisterAsync(stdio);
+                    anyRegistered = true;
+                    Logger.Info("App", $"注册 MCP 服务器（stdio）：{s.Name}，command={s.Command}");
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error("App", $"注册 stdio MCP 服务器 {s.Name} 失败", ex);
+                }
+            }
+            else if (s.Type == "sse")
+            {
+                if (string.IsNullOrWhiteSpace(s.Url))
+                {
+                    Logger.Warn("App", $"跳过 MCP 服务器 {s.Name}：url 为空");
+                    continue;
+                }
+                try
+                {
+                    var sse = new SseMcpServer(s.Name, s.Url!);
+                    await sse.InitializeAsync();
+                    await McpManager.Instance.RegisterAsync(sse);
+                    anyRegistered = true;
+                    Logger.Info("App", $"注册 MCP 服务器（sse）：{s.Name}，url={s.Url}");
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error("App", $"注册 sse MCP 服务器 {s.Name} 失败", ex);
+                }
             }
             else
             {
@@ -323,9 +431,32 @@ public static class SpriteGeneratorRegistry
                 break;
         }
 
-        // 2) 默认 BGM：若无任何 bgm 文件，按角色生成
+        // 2) 验证精灵图规格（若用户用 Aseprite 替换了文件，确保网格匹配）
+        var cfg = ConfigService.Load();
+        if (File.Exists(sheetPath))
+        {
+            SpriteSheetValidator.ValidateAndLog(sheetPath, cfg.SpriteCols, cfg.SpriteRows);
+        }
+
+        // 3) 导出调色板到 palette.gpl / palette.hex（供 Aseprite 等工具导入）
+        var palette = GetPalette(dirName);
+        if (palette != null)
+        {
+            PaletteExporter.ExportForRole(roleDir, roleName, palette);
+        }
+
+        // 4) 默认 BGM：若无任何 bgm 文件，按角色生成
         EnsureDefaultBgm(dirName, roleDir);
     }
+
+    /// <summary>获取角色调色板（用于导出 .gpl 供 Aseprite 导入）。</summary>
+    private static Dictionary<char, System.Windows.Media.Color>? GetPalette(string dirName)
+        => dirName.ToLowerInvariant() switch
+        {
+            "luffy" => LuffySpriteGenerator.Palette,
+            "zoro" => ZoroSpriteGenerator.Palette,
+            _ => null
+        };
 
     /// <summary>若无 bgm.mp3/bgm.wav 则生成默认占位 BGM。</summary>
     private static void EnsureDefaultBgm(string dirName, string roleDir)

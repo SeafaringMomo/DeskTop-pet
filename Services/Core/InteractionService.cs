@@ -71,6 +71,7 @@ public sealed class InteractionService
         }
 
         // 加好感度（带上饱食度加成）
+        var beforeLevel = AffinityService.Instance.GetLevel(AffinityService.Instance.GetAffinity(role));
         AffinityService.Instance.AddAffinity(role, reward, applySatietyBonus: true);
 
         // 记录冷却
@@ -82,6 +83,24 @@ public sealed class InteractionService
                   $"好感度 +{reward} → {after}（{level.Name}）";
 
         Logger.Info("Interact", $"{role} 互动 {action}，好感度+{reward} → {after}（{level.Name}）");
+
+        // 触发情绪（根据互动类型）
+        switch (action)
+        {
+            case "pat":
+                MoodService.Instance.SetMood(PetMood.Happy);
+                break;
+            case "highfive":
+                MoodService.Instance.SetMood(PetMood.Excited);
+                break;
+        }
+
+        // 等级跃迁 → 兴奋
+        if (!string.Equals(beforeLevel.Name, level.Name, StringComparison.Ordinal) &&
+            beforeLevel.Min < level.Min)
+        {
+            MoodService.Instance.SetMood(PetMood.Excited, 60_000);
+        }
 
         return new InteractResult
         {

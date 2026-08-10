@@ -62,12 +62,22 @@ public partial class PetWindow : Window
     private int _frameWidth;
     private int _frameHeight;
 
+    /// <summary>动作系统服务：驱动 breath/float/idle 循环与一次性互动动作。
+    /// 持有 _frames 引用，加载帧后即可使用。</summary>
+    private readonly AnimationService _anim;
+
     public PetWindow()
     {
         InitializeComponent();
         _config = ConfigService.Load();
         _talk = new TalkWindow();
         _todo = new TodoWindow();
+        // 动作服务持有 _frames 引用，后续 LoadFrames 填充内容时 _anim 能看到
+        _anim = new AnimationService(this, _frames, ConfigService.LoadAnimations);
+
+        // 粒子服务：绑定 ParticleLayer Canvas，并把动作系统的粒子触发回调接到 Spawn
+        ParticleService.Instance.Attach(ParticleLayer);
+        SetParticleCallback(ParticleService.Instance.Spawn);
 
         PositionToDefaultCorner();
         SetupTray();
@@ -92,7 +102,10 @@ public partial class PetWindow : Window
     private void EnsureOnScreen()
     {
         var work = SystemParameters.WorkArea;
-        if (Left < work.Left - Width || Left > work.Right || Top < work.Top - Height || Top > work.Bottom)
+        // 任一边超出工作区即重定位（含部分超出：右/下方向超出 1px 也算）
+        if (Left < work.Left || Top < work.Top ||
+            Left + Width > work.Right || Top + Height > work.Bottom ||
+            Left > work.Right || Top > work.Bottom)
         {
             PositionToDefaultCorner();
             Logger.Info("Pet", $"窗口超出工作区，已重定位到 ({Left:F0},{Top:F0})");
@@ -138,6 +151,8 @@ public partial class PetWindow : Window
         LoadFrames();
         _index = 0;
         ShowFrame(0, true);
+        // 尺寸确定后重新校准位置，避免初始 XAML 尺寸与实际帧尺寸不符导致显示不全
+        EnsureOnScreen();
         SetTrayIconFromRole();
         SetupTimerForCurrentFrame();
 
@@ -246,10 +261,20 @@ public partial class PetWindow : Window
             try
             {
                 var sheet = LoadFrozenBitmap(sheetPath);
-                int fw = sheet.PixelWidth / Math.Max(1, _config.SpriteCols);
-                int fh = sheet.PixelHeight / Math.Max(1, _config.SpriteRows);
-                for (int r = 0; r < _config.SpriteRows; r++)
-                    for (int c = 0; c < _config.SpriteCols; c++)
+                int cols = Math.Max(1, _config.SpriteCols);
+                int rows = Math.Max(1, _config.SpriteRows);
+                // 尺寸校验：sheet 宽高必须能被 cols/rows 整除，否则按错误的网格切分会得到残缺帧
+                // 常见原因：app.yaml 升级了 cols/rows，但 static/ 下的 sheet.png 还是旧版（如 2×1=256×128）
+                if (sheet.PixelWidth % cols != 0 || sheet.PixelHeight % rows != 0)
+                {
+                    throw new InvalidOperationException(
+                        $"精灵图尺寸 {sheet.PixelWidth}×{sheet.PixelHeight} 无法按 {cols}×{rows} 网格切分。" +
+                        $"请删除该文件让程序重新生成，或修改 app.yaml 的 sprite.cols/rows 与图片匹配。");
+                }
+                int fw = sheet.PixelWidth / cols;
+                int fh = sheet.PixelHeight / rows;
+                for (int r = 0; r < rows; r++)
+                    for (int c = 0; c < cols; c++)
                     {
                         var crop = new CroppedBitmap(sheet, new Int32Rect(c * fw, r * fh, fw, fh));
                         crop.Freeze();
@@ -448,6 +473,20 @@ public partial class PetWindow : Window
         };
         menu.Items.Add(miShow);
 
+        var miSettings = new MenuItem { Header = "设置" };
+        miSettings.Click += (_, _) =>
+        {
+            Logger.Info("UI", "托盘菜单：打开设置");
+            try
+            {
+                var win = new SettingsWindow { Owner = null };
+                win.ApplyTheme(_roleName);
+                win.ShowDialog();
+            }
+            catch (Exception ex) { Logger.Error("UI", "打开设置窗口失败", ex); }
+        };
+        menu.Items.Add(miSettings);
+
         var miQuit = new MenuItem { Header = "退出" };
         miQuit.Click += (_, _) => { Logger.Info("UI", "托盘菜单：退出"); Quit(); };
         menu.Items.Add(miQuit);
@@ -639,9 +678,17 @@ public partial class PetWindow : Window
         Logger.Info("Interact", $"双击抚摸：{result.Message}");
     }
 
-    /// <summary>抚摸反应动画：短暂向上轻跳 + 缩放反馈。</summary>
+    /// <summary>抚摸反应动画：优先走 animations.yaml 的 "pat" 配置，否则回退到硬编码。</summary>
     public void PlayPatReaction()
     {
+        var cfg = ConfigService.LoadAnimations();
+        if (cfg.Animations.ContainsKey("pat"))
+        {
+            _anim.Play("pat");
+            return;
+        }
+
+        // 回退：硬编码缩放反馈 + 轻跳
         // 停止呼吸/漂浮的当前动画，避免冲突
         BreathScale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
         BobTranslate.BeginAnimation(TranslateTransform.YProperty, null);
@@ -664,9 +711,17 @@ public partial class PetWindow : Window
         BobTranslate.BeginAnimation(TranslateTransform.YProperty, jump);
     }
 
-    /// <summary>击掌反应动画：横向晃动 + 轻微放大。</summary>
+    /// <summary>击掌反应动画：优先走 animations.yaml 的 "highfive" 配置，否则回退到硬编码。</summary>
     public void PlayHighfiveReaction()
     {
+        var cfg = ConfigService.LoadAnimations();
+        if (cfg.Animations.ContainsKey("highfive"))
+        {
+            _anim.Play("highfive");
+            return;
+        }
+
+        // 回退：硬编码横向晃动 + 轻微放大
         BreathScale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
         BreathScale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
         BobTranslate.BeginAnimation(TranslateTransform.YProperty, null);
@@ -687,6 +742,18 @@ public partial class PetWindow : Window
             EasingFunction = new SineEase()
         };
         BreathScale.BeginAnimation(ScaleTransform.ScaleYProperty, sy);
+    }
+
+    /// <summary>通过动作 ID 播放配置驱动的任意动作（供互动面板/喂食/聊天等调用）。</summary>
+    public void PlayAnimation(string animationId)
+    {
+        _anim.Play(animationId);
+    }
+
+    /// <summary>注册粒子触发回调，由 ParticleService 调用以接收动作触发的粒子事件。</summary>
+    public void SetParticleCallback(Action<string, int, int, int> callback)
+    {
+        _anim.OnParticleTrigger = callback;
     }
 
     protected override void OnMouseMove(MouseEventArgs e)
@@ -810,6 +877,9 @@ public partial class PetWindow : Window
         _timer?.Stop();
         _audio.Dispose();
         _trayIcon?.Dispose();
+        // 解绑粒子服务并清除残留粒子
+        ParticleService.Instance.Clear();
+        ParticleService.Instance.Detach();
         // ShutdownMode=OnExplicitShutdown，需确保窗口关闭后应用退出
         if (Application.Current.ShutdownMode == ShutdownMode.OnExplicitShutdown)
         {

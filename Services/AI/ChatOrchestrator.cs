@@ -55,6 +55,10 @@ public sealed class ChatOrchestrator
         // 加入历史（用户消息）
         _history.Add(new ChatMessage { Role = "user", Content = userMessage });
 
+        // 识别用户消息关键词 → 触发情绪
+        try { MoodService.Instance.DetectFromMessage(userMessage); }
+        catch { /* MoodService 异常不影响主流程 */ }
+
         // 取所有 MCP 工具
         var tools = provider.SupportsToolCalling
             ? await McpManager.Instance.ListAllToolsAsync(ct).ConfigureAwait(false)
@@ -76,12 +80,20 @@ public sealed class ChatOrchestrator
             if (!resp.HasToolCalls || !provider.SupportsToolCalling)
             {
                 _history.Add(new ChatMessage { Role = "assistant", Content = resp.Content });
+                // 识别 AI 回复关键词 → 同步情绪（让宠物表情跟着 AI 语气走）
+                try { MoodService.Instance.DetectFromMessage(resp.Content); }
+                catch { /* MoodService 异常不影响主流程 */ }
                 return resp.Content;
             }
 
             // 1) 把助手的工具调用消息追加进历史
-            _history.Add(new ChatMessage { Role = "assistant", Content = resp.Content });
-            // 注：OpenAI 协议里 tool_calls 是结构化字段，这里简化为序列化文本，便于本地历史展示
+            // 按 OpenAI 协议把 tool_calls 序列化到 assistant 消息上，否则下一轮请求被严格服务拒绝
+            _history.Add(new ChatMessage
+            {
+                Role = "assistant",
+                Content = resp.Content,
+                ToolCalls = SerializeToolCallsForHistory(resp.ToolCalls)
+            });
             request.History = _history.ToList();
 
             // 2) 逐个执行工具，把结果作为 tool 角色消息回传
@@ -115,5 +127,30 @@ public sealed class ChatOrchestrator
         _history.Add(new ChatMessage { Role = "assistant", Content = fallback });
         Logger.Warn("Chat", $"达到最大工具调用轮数 {MaxToolRounds}，返回兜底回复");
         return fallback;
+    }
+
+    /// <summary>
+    /// 把 ToolCall 列表序列化为 OpenAI 协议的 tool_calls JSON 数组字符串。
+    /// 用于把 assistant 消息的 tool_calls 字段持久化到历史，下一轮请求重放时使用。
+    /// </summary>
+    private static string? SerializeToolCallsForHistory(IReadOnlyList<ToolCall> calls)
+    {
+        if (calls == null || calls.Count == 0) return null;
+        var arr = new JsonArray();
+        foreach (var c in calls)
+        {
+            var fn = new JsonObject
+            {
+                ["name"] = c.Name,
+                ["arguments"] = c.ArgumentsJson
+            };
+            arr.Add(new JsonObject
+            {
+                ["id"] = c.Id,
+                ["type"] = "function",
+                ["function"] = fn
+            });
+        }
+        return arr.ToJsonString();
     }
 }

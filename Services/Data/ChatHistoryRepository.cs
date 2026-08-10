@@ -54,6 +54,34 @@ public sealed class ChatHistoryRepository
             );
             CREATE INDEX IF NOT EXISTS idx_chatmsg_session ON ChatMessage(SessionId);";
         cmd.ExecuteNonQuery();
+
+        // 向后兼容：旧表缺少 ToolCallId / ToolName 列，缺失则补齐
+        // 用于 OpenAI 多轮工具调用持久化（P1.1 修复）
+        TryAddColumn(conn, "ChatMessage", "ToolCallId", "TEXT");
+        TryAddColumn(conn, "ChatMessage", "ToolName", "TEXT");
+    }
+
+    /// <summary>尝试给表添加列。若列已存在则静默忽略（兼容已存在的旧表）。</summary>
+    private static void TryAddColumn(SqliteConnection conn, string table, string column, string type)
+    {
+        try
+        {
+            var check = conn.CreateCommand();
+            check.CommandText = $"PRAGMA table_info({table});";
+            using var r = check.ExecuteReader();
+            while (r.Read())
+            {
+                if (r.GetString(1).Equals(column, StringComparison.OrdinalIgnoreCase))
+                    return;
+            }
+            var alter = conn.CreateCommand();
+            alter.CommandText = $"ALTER TABLE {table} ADD COLUMN {column} {type};";
+            alter.ExecuteNonQuery();
+        }
+        catch (SqliteException)
+        {
+            // 列已存在或其他问题，忽略
+        }
     }
 
     private SqliteConnection OpenConn()
@@ -89,15 +117,21 @@ public sealed class ChatHistoryRepository
         };
     }
 
-    /// <summary>添加一条消息到指定会话。若会话标题为"新对话"则自动更新为首条消息前 20 字。</summary>
-    public void AddMessage(long sessionId, string role, string content, string? toolCalls = null)
+    /// <summary>
+    /// 添加一条消息到指定会话。若会话标题为"新对话"则自动更新为首条消息前 20 字。
+    /// </summary>
+    /// <param name="toolCalls">assistant 消息携带的 tool_calls JSON（OpenAI 协议）</param>
+    /// <param name="toolCallId">tool 角色消息对应的调用 ID</param>
+    /// <param name="toolName">tool 角色消息对应的工具名</param>
+    public void AddMessage(long sessionId, string role, string content,
+        string? toolCalls = null, string? toolCallId = null, string? toolName = null)
     {
         var now = DateTime.Now.ToString("o");
         using var conn = OpenConn();
         var cmd = conn.CreateCommand();
         cmd.CommandText = @"
-            INSERT INTO ChatMessage (SessionId, Role, Content, Timestamp, ToolCalls)
-            VALUES (@sid, @role, @content, @ts, @tc);
+            INSERT INTO ChatMessage (SessionId, Role, Content, Timestamp, ToolCalls, ToolCallId, ToolName)
+            VALUES (@sid, @role, @content, @ts, @tc, @tid, @tn);
             UPDATE ChatSession SET UpdatedAt = @ts WHERE Id = @sid;
             UPDATE ChatSession SET Title = @title
             WHERE Id = @sid AND Title = '新对话';";
@@ -106,6 +140,8 @@ public sealed class ChatHistoryRepository
         cmd.Parameters.AddWithValue("@content", content ?? "");
         cmd.Parameters.AddWithValue("@ts", now);
         cmd.Parameters.AddWithValue("@tc", (object?)toolCalls ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@tid", (object?)toolCallId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@tn", (object?)toolName ?? DBNull.Value);
         var title = (content ?? "").Length > 20
             ? (content ?? "").Substring(0, 20) + "…"
             : (content ?? "");
@@ -142,7 +178,7 @@ public sealed class ChatHistoryRepository
         var list = new List<ChatMessageRecord>();
         using var conn = OpenConn();
         var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT Id, SessionId, Role, Content, Timestamp, ToolCalls FROM ChatMessage WHERE SessionId = @sid ORDER BY Id ASC;";
+        cmd.CommandText = "SELECT Id, SessionId, Role, Content, Timestamp, ToolCalls, ToolCallId, ToolName FROM ChatMessage WHERE SessionId = @sid ORDER BY Id ASC;";
         cmd.Parameters.AddWithValue("@sid", sessionId);
         using var r = cmd.ExecuteReader();
         while (r.Read())
@@ -154,7 +190,9 @@ public sealed class ChatHistoryRepository
                 Role = r.GetString(2),
                 Content = r.GetString(3),
                 Timestamp = r.GetString(4),
-                ToolCalls = r.IsDBNull(5) ? null : r.GetString(5)
+                ToolCalls = r.IsDBNull(5) ? null : r.GetString(5),
+                ToolCallId = r.IsDBNull(6) ? null : r.GetString(6),
+                ToolName = r.IsDBNull(7) ? null : r.GetString(7)
             });
         }
         return list;

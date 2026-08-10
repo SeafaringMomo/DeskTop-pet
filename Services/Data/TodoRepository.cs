@@ -41,14 +41,29 @@ public sealed class TodoRepository
                 UpdatedAt TEXT NOT NULL,
                 IsDone INTEGER NOT NULL
             );";
-        // 兼容旧表（如果是从 todohelper 项目迁移来的）：缺列就补
-        try
+        cmd.ExecuteNonQuery();
+
+        // 兼容旧表（如果是从 todohelper 项目迁移来的）：缺列才补，避免重复 ALTER 抛 SqliteException
+        if (!ColumnExists(conn, "UpdatedAt"))
         {
-            cmd.ExecuteNonQuery();
             cmd.CommandText = "ALTER TABLE Todo ADD COLUMN UpdatedAt TEXT NOT NULL DEFAULT '';";
             cmd.ExecuteNonQuery();
         }
-        catch (SqliteException) { /* UpdatedAt 已存在 */ }
+    }
+
+    /// <summary>检查 Todo 表是否存在指定列。用 PRAGMA table_info 避免 ALTER 重复抛异常。</summary>
+    private static bool ColumnExists(SqliteConnection conn, string columnName)
+    {
+        using var checkCmd = conn.CreateCommand();
+        checkCmd.CommandText = "PRAGMA table_info(Todo);";
+        using var reader = checkCmd.ExecuteReader();
+        while (reader.Read())
+        {
+            // PRAGMA table_info 返回列：cid, name, type, notnull, dflt_value, pk
+            if (string.Equals(reader.GetString(1), columnName, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
     }
 
     private SqliteConnection OpenConn()

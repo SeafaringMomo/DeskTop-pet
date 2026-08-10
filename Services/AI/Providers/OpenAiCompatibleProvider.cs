@@ -70,11 +70,36 @@ public sealed class OpenAiCompatibleProvider : IAiProvider
         }
         foreach (var m in request.History)
         {
-            messages.Add(new JsonObject
+            var msg = new JsonObject
             {
                 ["role"] = m.Role,
                 ["content"] = m.Content
-            });
+            };
+
+            // assistant 消息若带 tool_calls，按 OpenAI 协议附上结构化字段
+            // 否则连续多轮工具调用的第二次请求会被严格服务拒绝
+            if (m.Role == "assistant" && !string.IsNullOrEmpty(m.ToolCalls))
+            {
+                try
+                {
+                    if (JsonNode.Parse(m.ToolCalls) is JsonArray arr)
+                        msg["tool_calls"] = arr;
+                }
+                catch
+                {
+                    // tool_calls JSON 解析失败时忽略，仅保留 content
+                }
+            }
+
+            // tool 角色消息必须带 tool_call_id（OpenAI 协议要求）
+            if (m.Role == "tool" && !string.IsNullOrEmpty(m.ToolCallId))
+            {
+                msg["tool_call_id"] = m.ToolCallId;
+                if (!string.IsNullOrEmpty(m.ToolName))
+                    msg["name"] = m.ToolName;
+            }
+
+            messages.Add(msg);
         }
         messages.Add(new JsonObject { ["role"] = "user", ["content"] = request.UserMessage });
 

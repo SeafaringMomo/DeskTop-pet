@@ -71,6 +71,13 @@ public sealed class ChatMessage
 
     public string Content { get; set; } = string.Empty;
 
+    /// <summary>
+    /// assistant 消息携带的工具调用 JSON 数组（OpenAI 协议 tool_calls 字段原样序列化）。
+    /// 仅当 Role == "assistant" 且模型发起工具调用时非空。
+    /// 例：[{"id":"call_xxx","type":"function","function":{"name":"addTodo","arguments":"{...}"}}]
+    /// </summary>
+    public string? ToolCalls { get; set; }
+
     /// <summary>若该消息是工具结果，则填写调用 ID 与名称。</summary>
     public string? ToolCallId { get; set; }
 

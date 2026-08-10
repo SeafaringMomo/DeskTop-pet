@@ -123,6 +123,17 @@ public sealed class FeedService
 
         Logger.Info("Feed", $"喂食: {role} 吃 {food.Name}，偏好={preference}，饱食度→{afterSatiety}，好感度+{actualDelta}");
 
+        // 按偏好触发情绪
+        switch (preference)
+        {
+            case FoodPreferenceLevel.Loved:
+                MoodService.Instance.SetMood(PetMood.Happy);
+                break;
+            case FoodPreferenceLevel.Disliked:
+                MoodService.Instance.SetMood(PetMood.Sad);
+                break;
+        }
+
         return new FeedResult
         {
             Success = true,

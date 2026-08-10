@@ -12,12 +12,20 @@ public static class PixelArtRenderer
 {
     /// <summary>
     /// 生成精灵图 PNG（多帧横向排列）+ 单帧 icon.png。
+    /// 适用于单行精灵图（cols=帧数, rows=1）。
     /// </summary>
-    /// <param name="sheetPath">精灵图输出路径</param>
-    /// <param name="frames">各帧的字符网格（每帧是 string[]，每行长度 = 帧宽度）</param>
-    /// <param name="palette">字符 → 颜色映射，'.' 表示透明</param>
-    /// <param name="scale">每个像素放大倍数</param>
     public static void RenderSpriteSheet(string sheetPath, string[][] frames, Dictionary<char, Color> palette, int scale)
+    {
+        RenderSpriteSheetGrid(sheetPath, frames, palette, scale, cols: frames.Length, rows: 1);
+    }
+
+    /// <summary>
+    /// 生成精灵图 PNG（按 cols × rows 网格排列）+ 单帧 icon.png。
+    /// 帧顺序按行优先：frames[0] 在左上，frames[cols-1] 在第一行末尾，frames[cols] 在第二行开头。
+    /// 若帧数不足 cols×rows，剩余位置透明。
+    /// </summary>
+    public static void RenderSpriteSheetGrid(string sheetPath, string[][] frames, Dictionary<char, Color> palette,
+                                              int scale, int cols, int rows)
     {
         var dir = Path.GetDirectoryName(sheetPath);
         if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
@@ -25,19 +33,25 @@ public static class PixelArtRenderer
 
         int framePx = frames[0].Length > 0 ? frames[0][0].Length : 0;
         int frameRows = frames[0].Length;
+        int totalSlots = cols * rows;
 
-        // 精灵图
+        // 精灵图（cols × rows 网格）
         if (!File.Exists(sheetPath))
         {
-            var sheetWidth = framePx * frames.Length * scale;
-            var sheetHeight = frameRows * scale;
+            var sheetWidth = framePx * cols * scale;
+            var sheetHeight = frameRows * rows * scale;
             var bmp = new WriteableBitmap(sheetWidth, sheetHeight, 96, 96, PixelFormats.Bgra32, null);
             var pixels = new byte[sheetWidth * sheetHeight * 4];
 
-            for (int f = 0; f < frames.Length; f++)
+            for (int i = 0; i < totalSlots; i++)
             {
-                FillPixels(pixels, frames[f], palette, scale, framePx, frameRows,
-                            offsetX: f * framePx * scale, sheetWidth: sheetWidth);
+                if (i >= frames.Length) break;
+                int col = i % cols;
+                int row = i / cols;
+                int offsetX = col * framePx * scale;
+                int offsetY = row * frameRows * scale;
+                FillPixels(pixels, frames[i], palette, scale, framePx, frameRows,
+                            offsetX, offsetY, sheetWidth);
             }
 
             bmp.WritePixels(new System.Windows.Int32Rect(0, 0, sheetWidth, sheetHeight), pixels, sheetWidth * 4, 0);
@@ -52,11 +66,10 @@ public static class PixelArtRenderer
         if (!File.Exists(iconPath))
         {
             var iconSize = framePx * scale;
-            // icon 取正方形：以帧宽度为边长，高度不足则补透明
             int iconH = frameRows * scale;
             var iconBmp = new WriteableBitmap(iconSize, iconSize, 96, 96, PixelFormats.Bgra32, null);
             var pixels = new byte[iconSize * iconSize * 4];
-            FillPixels(pixels, frames[0], palette, scale, framePx, frameRows, 0, iconSize);
+            FillPixels(pixels, frames[0], palette, scale, framePx, frameRows, 0, 0, iconSize);
             iconBmp.WritePixels(new System.Windows.Int32Rect(0, 0, iconSize, iconSize), pixels, iconSize * 4, 0);
             using var fs = File.Create(iconPath);
             var encoder = new PngBitmapEncoder();
@@ -67,7 +80,7 @@ public static class PixelArtRenderer
 
     /// <summary>把一帧的像素数据填入字节数组。</summary>
     private static void FillPixels(byte[] pixels, string[] frame, Dictionary<char, Color> palette,
-                                    int scale, int framePx, int frameRows, int offsetX, int sheetWidth)
+                                    int scale, int framePx, int frameRows, int offsetX, int offsetY, int sheetWidth)
     {
         for (int y = 0; y < frameRows; y++)
         {
@@ -80,7 +93,7 @@ public static class PixelArtRenderer
                     for (int dx = 0; dx < scale; dx++)
                     {
                         int px = offsetX + x * scale + dx;
-                        int py = y * scale + dy;
+                        int py = offsetY + y * scale + dy;
                         int offset = (py * sheetWidth + px) * 4;
                         pixels[offset] = color.B;
                         pixels[offset + 1] = color.G;
