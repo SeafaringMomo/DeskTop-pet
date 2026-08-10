@@ -1,0 +1,78 @@
+# 皮肤定义（非敏感，可入库）
+# 皮肤系统包含：声音、主题配色、角色
+# 每个皮肤有独立的精灵图、BGM、配色主题，与角色绑定但可独立切换
+
+skins:
+  # ===== 路飞皮肤 =====
+  - id: luffy_classic
+    role: 路飞
+    name: 经典路飞
+    sprite_dir: static/luffy/classic    # 精灵图目录（相对 BaseDir）
+    theme:
+      primary: "#F5D547"
+      accent: "#E74C3C"
+      background: "#3D2817"
+      surface: "#5C3A1E"
+      text: "#FFF3D9"
+      border: "#F5D547"
+    audio:
+      bgm: bgm.mp3                      # 背景音乐（相对 sprite_dir）
+      greeting_morning: 早上好.mp3
+      greeting_noon: 中午好.mp3
+      greeting_evening: 晚上好.mp3
+      farewell: 晚安.mp3
+      feed_sfx: eat.mp3                 # 喂食音效（可选，缺失则跳过）
+    description: 草帽小子初登场
+    is_default: true                    # 该角色的默认皮肤
+
+  - id: luffy_gear4
+    role: 路飞
+    name: 四档·弹跳人
+    sprite_dir: static/luffy/gear4
+    theme:
+      primary: "#D4A017"
+      accent: "#8B0000"
+      background: "#1A0A00"
+      surface: "#3D1A00"
+      text: "#FFD700"
+      border: "#D4A017"
+    audio:
+      bgm: bgm.mp3
+      # 其他音频省略则回退到默认皮肤
+    description: 霸气缠绕的弹跳人形态
+
+  # ===== 索隆皮肤 =====
+  - id: zoro_classic
+    role: 索隆
+    name: 经典索隆
+    sprite_dir: static/zoro/classic
+    theme:
+      primary: "#3A7D3A"
+      accent: "#8B4513"
+      background: "#1A2E1A"
+      surface: "#2A3F2A"
+      text: "#D9E8D9"
+      border: "#3A7D3A"
+    audio:
+      bgm: bgm.wav
+      greeting_morning: 早上好.mp3
+      greeting_noon: 中午好.mp3
+      greeting_evening: 晚上好.mp3
+      farewell: 晚安.mp3
+    description: 海贼猎人的经典造型
+    is_default: true
+
+  - id: zoro_ronin
+    role: 索隆
+    name: 浪人剑客
+    sprite_dir: static/zoro/ronin
+    theme:
+      primary: "#2C3E50"
+      accent: "#C0392B"
+      background: "#1A1A1A"
+      surface: "#2C2C2C"
+      text: "#ECF0F1"
+      border: "#2C3E50"
+    audio:
+      bgm: bgm.mp3
+    description: 隐居的浪人剑客

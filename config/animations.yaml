@@ -1,0 +1,332 @@
+# 动作系统定义（非敏感，可入库）
+# 动作系统独立于皮肤：不同皮肤共用同一套动作定义，只是帧图不同
+#
+# 动作类型：
+#   sprite_sheet  - 帧动画（按 frames 索引切换 PetImage.Source）
+#   procedural    - 程序化动画（驱动 BreathScale / BobTranslate / PetRotate / PetImage.Opacity）
+#
+# 程序化动画模式（二选一）：
+#   简单模式：设置 from/to + target，单属性单段动画
+#     target 可选值：
+#       scale_y      - 驱动 BreathScale.ScaleY
+#       scale_x      - 驱动 BreathScale.ScaleX
+#       scale        - 同时驱动 ScaleX + ScaleY（用 scale_x/scale_y 字段指定终值）
+#       scale_xy     - 独立 X/Y 缩放（from/to 用于 X，scale_x/scale_y 用于终值）
+#       translate_y  - 驱动 BobTranslate.Y
+#       translate_x  - 驱动 BobTranslate.X
+#       rotate       - 驱动 PetRotate.Angle（度）
+#       opacity      - 驱动 PetImage.Opacity（0-1）
+#   关键帧模式：设置 keyframes 列表，可同时驱动多个属性
+#     每个 keyframe 的 progress 字段为 0-100 的百分比
+#
+# 动作链（chain）：设置 chain 字段后，会按顺序串行播放每个子动作
+#   如 chain: [jump, blink] 表示先播 jump 再播 blink
+#
+# 缓动函数（easing）：linear / sine / cubic / quadratic / bounce / elastic / back
+#
+# 粒子触发（particles）：动作播放时同步触发粒子（需配合顶层 particles 段定义粒子渲染参数）
+#   - type: 粒子类型（heart/sweat/zzz/question/exclamation/sparkle 等）
+#   - count: 数量
+#   - at_ms: 触发时机（毫秒，0=动作开始时立即触发）
+#   - offset_x/offset_y: 起始偏移（相对宠物中心，像素）
+
+animations:
+  # === 待机循环（默认状态）===
+  idle:
+    type: sprite_sheet
+    interval_ms: 3000           # 眨眼间隔
+    frames: [0, 1]              # 帧 0（睁眼）↔ 帧 1（闭眼）
+    weight: 1.0                  # idle 随机选择时的权重
+
+  breath:
+    type: procedural
+    target: scale_y             # 驱动 BreathScale.ScaleY
+    from: 1.0
+    to: 1.03
+    duration_s: 2.0
+    auto_reverse: true
+    easing: sine
+
+  float:
+    type: procedural
+    target: translate_y         # 驱动 BobTranslate.Y
+    from: 0
+    to: -3
+    duration_s: 2.0
+    auto_reverse: true
+    easing: sine
+
+  # === 拖拽 ===
+  drag:
+    type: procedural
+    target: scale
+    scale_x: 0.96
+    scale_y: 1.08
+    duration_ms: 120
+    easing: sine
+
+  # === 互动动作（一次性）===
+  pat:                          # 抚摸：关键帧压扁 + 轻跳 + 爱心粒子
+    type: procedural
+    duration_ms: 360
+    easing: sine
+    keyframes:
+      - progress: 0
+        scale_y: 1.0
+        translate_y: 0
+      - progress: 30
+        scale_y: 0.92           # 压扁
+        translate_y: 0
+      - progress: 70
+        scale_y: 1.05           # 回弹放大
+        translate_y: -6         # 向上轻跳
+      - progress: 100
+        scale_y: 1.0
+        translate_y: 0
+    particles:
+      - type: heart
+        count: 3
+        at_ms: 100
+        offset_y: -20
+
+  highfive:                     # 击掌：横向晃动 + 轻微放大
+    type: procedural
+    duration_ms: 300
+    easing: sine
+    keyframes:
+      - progress: 0
+        scale_x: 1.0
+        scale_y: 1.0
+      - progress: 50
+        scale_x: 1.08           # 横向晃动
+        scale_y: 1.05           # 轻微放大
+      - progress: 100
+        scale_x: 1.0
+        scale_y: 1.0
+    particles:
+      - type: sparkle
+        count: 5
+        at_ms: 0
+
+  feed:                         # 喂食：眯眼 1 秒
+    type: sprite_sheet
+    frames: [1]
+    duration_ms: 1000
+    repeat: 1
+
+  # === 复合动作示例（动作链）===
+  happy_jump:                   # 开心跳：先压扁蓄力 → 高跳 → 落地反弹
+    type: procedural
+    chain: [happy_jump_crouch, happy_jump_leap, happy_jump_land]
+
+  happy_jump_crouch:
+    type: procedural
+    target: scale
+    scale_x: 1.1
+    scale_y: 0.9                # 蓄力压扁
+    duration_ms: 150
+    easing: sine
+
+  happy_jump_leap:
+    type: procedural
+    target: translate_y
+    from: 0
+    to: -20                    # 跳起来
+    duration_ms: 250
+    auto_reverse: true
+    easing: cubic              # 三次缓动更自然
+
+  happy_jump_land:
+    type: procedural
+    target: scale
+    scale_x: 0.95
+    scale_y: 1.05              # 落地反弹
+    duration_ms: 150
+    easing: bounce             # 弹性落地
+
+  # === 旋转动作示例 ===
+  spin:                         # 旋转一周
+    type: procedural
+    target: rotate
+    from: 0
+    to: 360
+    duration_ms: 600
+    easing: cubic
+
+  head_shake:                   # 摇头：左右各一次
+    type: procedural
+    target: rotate
+    from: -15
+    to: 15
+    duration_ms: 150
+    auto_reverse: true
+    repeat: "1"
+    easing: sine
+
+  # === 透明度动作示例 ===
+  fade_out:                     # 渐隐
+    type: procedural
+    target: opacity
+    from: 1.0
+    to: 0.0
+    duration_ms: 500
+    easing: sine
+
+  fade_in:                      # 渐显
+    type: procedural
+    target: opacity
+    from: 0.0
+    to: 1.0
+    duration_ms: 500
+    easing: sine
+
+  # === 状态动作（持续循环）===
+  hungry:                       # 饥饿：持续闭眼
+    type: sprite_sheet
+    frames: [1]
+    repeat: forever
+
+  sleep:                        # 睡眠：长时间无互动
+    type: sprite_sheet
+    frames: [1]
+    repeat: forever
+
+  # === 好感度等级动作示例 ===
+  # 不同等级在 idle 时偶尔触发的随机动作（weight 决定概率）
+  look_around:                  # 左顾右盼
+    type: procedural
+    chain: [look_left, look_right, look_left, look_front]
+    weight: 0.2
+
+  look_left:
+    type: procedural
+    target: translate_x
+    from: 0
+    to: -3
+    duration_ms: 200
+    auto_reverse: true
+    easing: sine
+
+  look_right:
+    type: procedural
+    target: translate_x
+    from: 0
+    to: 3
+    duration_ms: 200
+    auto_reverse: true
+    easing: sine
+
+  look_front:
+    type: procedural
+    target: translate_x
+    from: 0
+    to: 0
+    duration_ms: 100
+    easing: sine
+
+  happy_bounce:                  # 挚友状态偶尔小跳
+    type: procedural
+    target: translate_y
+    from: 0
+    to: -8
+    duration_ms: 250
+    auto_reverse: true
+    easing: bounce
+    weight: 0.3
+
+  # === 庆祝动作 ===
+  celebrate:                    # 升级庆祝：跳跃 + 旋转 + 闪光粒子
+    type: procedural
+    chain: [happy_jump, spin]
+    particles:
+      - type: sparkle
+        count: 8
+        at_ms: 0
+      - type: heart
+        count: 3
+        at_ms: 300
+        offset_y: -30
+
+# === 情绪覆盖：不同 mood 下的 idle 动作权重 ===
+# 当 mood != neutral 时，按 weight 在 idle 循环中随机选择动作播放
+mood_overrides:
+  neutral:
+    blink: 1.0
+    look_around: 0.1
+    happy_bounce: 0.0
+  happy:
+    blink: 0.7
+    look_around: 0.2
+    happy_bounce: 0.3
+  excited:
+    blink: 0.5
+    look_around: 0.2
+    happy_bounce: 0.5
+    celebrate: 0.05
+  sad:
+    blink: 0.5
+    look_around: 0.0
+    happy_bounce: 0.0
+  angry:
+    blink: 0.3
+    look_around: 0.0
+    happy_bounce: 0.0
+  curious:
+    blink: 0.7
+    look_around: 0.5
+    happy_bounce: 0.0
+  shy:
+    blink: 0.8
+    look_around: 0.0
+    happy_bounce: 0.0
+
+# === 粒子渲染参数 ===
+# 粒子类型 → 渲染符号、颜色、上升速度、生命周期
+particles:
+  heart:
+    symbol: "❤"
+    font_size: 18
+    color: "#FFFF4D6E"
+    rise_speed: 35
+    drift: 8
+    lifetime_ms: 1800
+
+  sweat:
+    symbol: "💧"
+    font_size: 16
+    color: null                  # 用符号原色
+    rise_speed: 20
+    drift: 4
+    lifetime_ms: 1500
+
+  zzz:
+    symbol: "💤"
+    font_size: 18
+    color: null
+    rise_speed: 25
+    drift: 12
+    lifetime_ms: 2500
+
+  question:
+    symbol: "?"
+    font_size: 22
+    color: "#FFFFC107"
+    rise_speed: 10
+    drift: 4
+    lifetime_ms: 2000
+
+  exclamation:
+    symbol: "!"
+    font_size: 22
+    color: "#FFFF5722"
+    rise_speed: 10
+    drift: 0
+    lifetime_ms: 1000
+
+  sparkle:
+    symbol: "✨"
+    font_size: 16
+    color: null
+    rise_speed: 30
+    drift: 16
+    lifetime_ms: 1200

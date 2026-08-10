@@ -1,0 +1,53 @@
+# 食物定义（非敏感，可入库）
+# 食物有：名称、图标、价格、饱食度增益、角色偏好（loved/normal/disliked）
+
+foods:
+  - id: meat
+    name: 烤肉
+    icon: 🍖
+    price: 20
+    satiety_gain: 30
+    role_preference:
+      路飞: loved          # loved ×1.5 好感度加成
+      索隆: normal         # normal ×1.0
+    description: 路飞的最爱
+
+  - id: sake
+    name: 清酒
+    icon: 🍶
+    price: 30
+    satiety_gain: 20
+    role_preference:
+      路飞: disliked       # disliked ×0.2 好感度
+      索隆: loved
+    description: 索隆最爱的饮料
+
+  - id: fish
+    name: 鲜鱼
+    icon: 🐟
+    price: 15
+    satiety_gain: 25
+    role_preference:
+      路飞: normal
+      索隆: normal
+    description: 海上的常见食物
+
+  - id: rice
+    name: 米饭
+    icon: 🍚
+    price: 10
+    satiety_gain: 20
+    role_preference:
+      路飞: normal
+      索隆: normal
+    description: 简单的主食
+
+  - id: fruit
+    name: 水果
+    icon: 🍎
+    price: 12
+    satiety_gain: 15
+    role_preference:
+      路飞: normal
+      索隆: disliked
+    description: 健康的零食
