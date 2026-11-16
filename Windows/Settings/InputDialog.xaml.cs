@@ -1,9 +1,9 @@
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
-using DesktopPetCSharp.Services;
+using DesktopGent.Services.Core;
 
-namespace DesktopPetCSharp.Windows;
+namespace DesktopGent.Windows;
 
 /// <summary>
 /// 简易输入对话框：用于在用户档案导入等场景获取用户输入。

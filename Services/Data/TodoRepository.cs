@@ -1,8 +1,8 @@
 using System.IO;
-using DesktopPetCSharp.Models;
+using DesktopGent.Models;
 using Microsoft.Data.Sqlite;
 
-namespace DesktopPetCSharp.Services;
+namespace DesktopGent.Services.Data;
 
 /// <summary>
 /// 待办数据访问层，移植自 todohelper20260629_csharp/Services/TodoRepository.cs。

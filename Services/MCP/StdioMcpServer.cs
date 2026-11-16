@@ -1,3 +1,4 @@
+using DesktopGent.Services.Core;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
@@ -6,7 +7,7 @@ using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace DesktopPetCSharp.Services.MCP;
+namespace DesktopGent.Services.MCP;
 
 /// <summary>
 /// stdio 传输的 MCP 服务器客户端：启动一个子进程，通过 stdin/stdout 交换 JSON-RPC 2.0 消息。
@@ -72,7 +73,7 @@ public sealed class StdioMcpServer : IMcpServer
             ["capabilities"] = new JsonObject(),
             ["clientInfo"] = new JsonObject
             {
-                ["name"] = "DesktopPetCSharp",
+                ["name"] = "DesktopGent",
                 ["version"] = "1.0.0"
             }
         };

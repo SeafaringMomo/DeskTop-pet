@@ -2,9 +2,10 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
-using DesktopPetCSharp.Models;
+using DesktopGent.Models;
+using DesktopGent.Services.Data;
 
-namespace DesktopPetCSharp.Services.MCP;
+namespace DesktopGent.Services.MCP;
 
 /// <summary>
 /// 将本地 <see cref="TodoRepository"/> 包装为虚拟 MCP 服务器。

@@ -3,10 +3,10 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
-using DesktopPetCSharp.Models;
-using DesktopPetCSharp.Services;
+using DesktopGent.Models;
+using DesktopGent.Services.Core;
 
-namespace DesktopPetCSharp.Windows;
+namespace DesktopGent.Windows;
 
 /// <summary>
 /// 启动页窗口：应用启动后第一个显示的窗口。
@@ -14,12 +14,12 @@ namespace DesktopPetCSharp.Windows;
 ///
 /// 流程：
 /// 1) 启动时显示用户列表
-/// 2) 双击用户或选中后回车 → 登录 → 关闭启动页 → 打开 PetWindow
+/// 2) 双击用户或选中后回车 → 登录 → 关闭启动页 → 打开 GentWindow
 /// 3) 点「新建用户」→ 弹窗输入用户名 → 创建后自动登录
 /// 4) 点「更换模型」→ 打开 ModelSettingsWindow（可在不进入主界面的情况下配置 AI）
 /// 5) 点「退出」→ 关闭应用
 ///
-/// 配色跟随默认角色主题（启动前尚无当前用户/角色，用 characters.yaml 的 default_role）。
+/// 配色跟随默认角色主题（启动前尚无当前用户/角色，用 theme.yaml 扫描出的默认角色）。
 /// </summary>
 public partial class LauncherWindow : Window
 {
@@ -105,10 +105,6 @@ public partial class LauncherWindow : Window
         NewUserButton.Foreground = darkText;
         NewUserButton.BorderBrush = darkText;
 
-        ModelButton.Background = new SolidColorBrush(theme.SurfaceColor);
-        ModelButton.Foreground = new SolidColorBrush(theme.TextColor);
-        ModelButton.BorderBrush = new SolidColorBrush(theme.PrimaryColor);
-
         QuitButton.Background = new SolidColorBrush(theme.AccentColor);
         QuitButton.Foreground = new SolidColorBrush(theme.TextColor);
         QuitButton.BorderBrush = darkText;
@@ -160,15 +156,6 @@ public partial class LauncherWindow : Window
         Entered = true;
         Logger.Info("Launcher", $"用户 {item.Name} 登录，进入主界面");
         Close();
-    }
-
-    private void ModelButton_Click(object sender, RoutedEventArgs e)
-    {
-        Logger.Info("Launcher", "打开模型设置窗口");
-        var win = new ModelSettingsWindow { Owner = this };
-        // 启动页阶段用默认角色主题
-        try { win.ApplyTheme(ConfigService.Load().Role); } catch { }
-        win.ShowDialog();
     }
 
     private void QuitButton_Click(object sender, RoutedEventArgs e)

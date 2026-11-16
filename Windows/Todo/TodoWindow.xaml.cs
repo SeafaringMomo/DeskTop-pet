@@ -3,14 +3,14 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
-using DesktopPetCSharp.Models;
-using DesktopPetCSharp.Services;
+using DesktopGent.Models;
+using DesktopGent.Services.Core;
 
-namespace DesktopPetCSharp.Windows;
+namespace DesktopGent.Windows;
 
 /// <summary>
 /// 待办窗口，移植自 todohelper20260629_csharp/MainWindow。
-/// 配色随角色切换（路飞=草帽黄/红/棕；索隆=绿/棕等），由 <see cref="ApplyTheme"/> 应用。
+/// 配色随角色切换（默认角色=草帽黄/红/棕；索隆=绿/棕等），由 <see cref="ApplyTheme"/> 应用。
 /// 支持：输入回车/点 Add 添加；双击切换完成状态；选中后删除；一键清除已完成；标题栏拖动窗口。
 /// 数据通过 <see cref="App.Todos"/> 单例仓储读写，与 LocalTodoMcpServer 共享同一份数据。
 /// </summary>
@@ -45,7 +45,7 @@ public partial class TodoWindow : Window
     }
 
     /// <summary>
-    /// 应用角色配色主题。由 PetWindow.Switch() 在切换角色时调用，
+    /// 应用角色配色主题。由 GentWindow.Switch() 在切换角色时调用，
     /// 实现"切换角色即切换配色"——配色与角色解耦，统一从 config 读取。
     /// </summary>
     public void ApplyTheme(string role)
@@ -164,7 +164,7 @@ public partial class TodoWindow : Window
             // P9: 完成待办联动好感度 +2（仅切换到"完成"时奖励，带上饱食度加成）
             if (item.IsDone)
             {
-                try { AffinityService.Instance.AddAffinity(_roleName, ConfigService.LoadPetManagement().Rewards.TodoComplete, applySatietyBonus: true); }
+                try { AffinityService.Instance.AddAffinity(_roleName, ConfigService.LoadGentManagement().Rewards.TodoComplete, applySatietyBonus: true); }
                 catch (Exception ex) { Logger.Warn("Todo", $"完成待办好感度加成失败：{ex.Message}"); }
             }
         }
@@ -283,7 +283,7 @@ public partial class TodoWindow : Window
 
     protected override void OnClosing(CancelEventArgs e)
     {
-        // 隐藏而非关闭，便于从宠物菜单反复打开；应用退出时调用 ForceClose 跳过此逻辑
+        // 隐藏而非关闭，便于从助手菜单反复打开；应用退出时调用 ForceClose 跳过此逻辑
         if (!_forceClose)
         {
             e.Cancel = true;

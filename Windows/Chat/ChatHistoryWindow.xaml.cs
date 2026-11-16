@@ -3,10 +3,10 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
-using DesktopPetCSharp.Models;
-using DesktopPetCSharp.Services;
+using DesktopGent.Models;
+using DesktopGent.Services.Core;
 
-namespace DesktopPetCSharp.Windows;
+namespace DesktopGent.Windows;
 
 /// <summary>
 /// 对话历史窗口：列出当前用户的所有历史会话，点击查看消息内容，

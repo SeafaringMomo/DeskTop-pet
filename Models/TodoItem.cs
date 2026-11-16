@@ -2,7 +2,7 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Text.Json.Serialization;
 
-namespace DesktopPetCSharp.Models;
+namespace DesktopGent.Models;
 
 /// <summary>
 /// 待办项模型，移植自 todohelper20260629_csharp/Models/TodoItem.cs。

@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using NAudio.Wave;
 
-namespace DesktopPetCSharp.Services;
+namespace DesktopGent.Services.Core;
 
 /// <summary>
 /// 音频服务，对应原 Python 项目中 pygame.mixer 的功能。

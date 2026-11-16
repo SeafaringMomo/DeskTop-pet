@@ -1,7 +1,7 @@
 using System.Speech.Recognition;
 using System.Globalization;
 
-namespace DesktopPetCSharp.Services;
+namespace DesktopGent.Services.Core;
 
 /// <summary>
 /// 麦克风语音识别服务，基于 System.Speech.Recognition（Windows 内置）。

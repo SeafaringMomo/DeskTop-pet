@@ -1,0 +1,10 @@
+# 助手角色主题配置，固定在角色目录 static/<角色英文目录>/theme.yaml
+# name：角色显示名（中文），会被“角色”菜单与配置服务读取
+# 其余字段为 UI 主题配色（聊天/待办/助手管理窗口共用）
+name: 默认角色
+primary: "#F5D547"
+accent: "#E74C3C"
+background: "#3D2817"
+surface: "#5C3A1E"
+text: "#FFF3D9"
+border: "#F5D547"

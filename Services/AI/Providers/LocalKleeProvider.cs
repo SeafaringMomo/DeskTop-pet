@@ -1,9 +1,11 @@
-namespace DesktopPetCSharp.Services.AI.Providers;
+using DesktopGent.Services.Core;
+
+namespace DesktopGent.Services.AI.Providers;
 
 /// <summary>
 /// 本地占位 AI 提供方，重写自原 ChatService 中的 KleeLocalChatService。
 /// 不联网、不支持工具调用，仅做关键词匹配并模拟活泼语气。
-/// 主角名取自配置文件（默认路飞），回复自称跟随主角名，
+/// 主角名取自配置文件（默认默认角色），回复自称跟随主角名，
 /// 这样用户替换像素图、改 role 后离线模式称呼也保持一致。
 /// 注册名："local-klee"（保留旧名兼容环境变量与已有配置）。
 /// </summary>
@@ -24,7 +26,7 @@ public sealed class LocalKleeProvider : IAiProvider
 
     private static string CurrentRole()
     {
-        try { return ConfigService.Load().Role; } catch { return "路飞"; }
+        try { return ConfigService.Load().Role; } catch { return "默认角色"; }
     }
 
     private static string Reply(string msg, string role)
@@ -38,7 +40,7 @@ public sealed class LocalKleeProvider : IAiProvider
         if (msg.Contains("吃") || msg.Contains("饿") || msg.Contains("肉"))
             return "肚子饿了吗？吃饱了才有力气冒险呀！";
         if (msg.Contains("待办") || msg.Contains("todo") || msg.Contains("任务") || msg.Contains("记一下"))
-            return "嗯…要记下待办事项吗？右键点击桌面宠物，选『待办』就能打开了哦！";
+            return "嗯…要记下待办事项吗？右键点击桌面助手，选『待办』就能打开了哦！";
         if (msg.Contains("再见") || msg.Contains("拜拜") || msg.Contains("bye", StringComparison.OrdinalIgnoreCase))
             return $"下次再来找{role}玩呀！再见啦～";
         if (msg.Contains("晚安") || msg.Contains("睡觉"))

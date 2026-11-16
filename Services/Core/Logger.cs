@@ -1,7 +1,7 @@
 using System.IO;
 using System.Linq;
 
-namespace DesktopPetCSharp.Services;
+namespace DesktopGent.Services.Core;
 
 /// <summary>
 /// 轻量级文件日志服务。记录用户每一次操作和应用关键事件，便于排查问题与回溯行为。

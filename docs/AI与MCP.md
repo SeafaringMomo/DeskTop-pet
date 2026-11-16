@@ -98,7 +98,7 @@ public interface IAiProvider
 1. 从注册表取默认提供方；若不支持工具调用或没有 MCP 工具，直接单轮对话返回
 2. 否则把 MCP 工具列表传给提供方；若模型请求工具，通过 `McpManager` 执行并把结果回传
 3. 最多循环 `MaxToolRounds` 次（默认 6）以防死循环
-4. **系统提示动态生成**：根据 `characters.yaml` 的 `role` 字段构造系统提示，切换角色后在线 AI 也会切换角色身份
+4. **系统提示动态生成**：根据 `ConfigService.Load().Role` 构造系统提示（角色由 `theme.yaml` 扫描而来），切换角色后在线 AI 也会切换角色身份
 5. **好感度等级注入**：`AffinityService.GetSystemPromptHint(role)` 把当前好感度等级的对话风格提示注入系统提示
 
 ### 关键属性

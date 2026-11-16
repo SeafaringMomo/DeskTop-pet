@@ -1,7 +1,7 @@
 using System.Text.Json.Serialization;
 using YamlDotNet.Serialization;
 
-namespace DesktopPetCSharp.Models;
+namespace DesktopGent.Models;
 
 /// <summary>
 /// 对话消息模型，对应 SQLite ChatMessage 表的一条记录。
@@ -33,7 +33,7 @@ public class ChatSession
     public long Id { get; set; }
     /// <summary>会话标题（首条消息前 20 字）</summary>
     public string Title { get; set; } = "";
-    /// <summary>会话开始时的角色名（路飞/索隆）</summary>
+    /// <summary>会话开始时的角色名（默认角色/索隆）</summary>
     public string Role { get; set; } = "";
     /// <summary>会话使用的 AI 提供方名</summary>
     public string Provider { get; set; } = "";

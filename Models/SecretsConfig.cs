@@ -1,6 +1,6 @@
 using YamlDotNet.Serialization;
 
-namespace DesktopPetCSharp.Models;
+namespace DesktopGent.Models;
 
 /// <summary>
 /// 敏感信息配置模型，对应 config/secrets.yaml。

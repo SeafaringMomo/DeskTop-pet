@@ -2,7 +2,7 @@ using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace DesktopPetCSharp.Services.AI;
+namespace DesktopGent.Services.AI;
 
 /// <summary>
 /// 通用 AI 提供方接口。设计为可同时支持"纯对话"和"工具调用"两种模式，

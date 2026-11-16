@@ -1,6 +1,6 @@
-using DesktopPetCSharp.Models;
+using DesktopGent.Models;
 
-namespace DesktopPetCSharp.Services;
+namespace DesktopGent.Services.Core;
 
 /// <summary>
 /// 喂食服务（P7）：管理饱食度、背包、喂食逻辑。
@@ -11,7 +11,7 @@ namespace DesktopPetCSharp.Services;
 /// - 饱食度<20：触发饥饿状态，开始扣好感度
 /// - 饱食度>80：互动好感度加成 ×1.2
 ///
-/// 喂食流程：扣背包 → 加饱食度 → 按偏好加好感度 → 触发动画/音效
+/// 喂食流程：扣背包 → 加饱食度 → 按偏好加好感度（不播放响应动画）
 /// </summary>
 public sealed class FeedService
 {
@@ -32,9 +32,9 @@ public sealed class FeedService
         if (user == null) return;
 
         if (!user.Satiety.ContainsKey(role))
-            user.Satiety[role] = ConfigService.LoadPetManagement().Constants.InitialSatiety;
+            user.Satiety[role] = ConfigService.LoadGentManagement().Constants.InitialSatiety;
 
-        user.Satiety[role] = System.Math.Clamp(user.Satiety[role] + delta, 0, 100);
+        user.Satiety[role] = Math.Clamp(user.Satiety[role] + delta, 0, 100);
         UserService.Instance.SaveCurrentProfile();
         Logger.Info("Feed", $"饱食度变化: {role} {delta:+#;-#;0} → {user.Satiety[role]}");
     }
@@ -93,7 +93,7 @@ public sealed class FeedService
 
         // 按偏好加好感度
         var preference = food.GetPreference(role);
-        var mgmt = ConfigService.LoadPetManagement();
+        var mgmt = ConfigService.LoadGentManagement();
         var baseAffinity = preference switch
         {
             FoodPreferenceLevel.Loved => mgmt.Rewards.FeedLoved,
@@ -106,7 +106,7 @@ public sealed class FeedService
         var actualDelta = baseAffinity;
         if (afterSatiety > 80)
         {
-            actualDelta = (int)System.Math.Round(baseAffinity * mgmt.Rewards.SatietyHighBonus);
+            actualDelta = (int)Math.Round(baseAffinity * mgmt.Rewards.SatietyHighBonus);
         }
         AffinityService.Instance.AddAffinity(role, actualDelta);
 
@@ -127,10 +127,10 @@ public sealed class FeedService
         switch (preference)
         {
             case FoodPreferenceLevel.Loved:
-                MoodService.Instance.SetMood(PetMood.Happy);
+                MoodService.Instance.SetMood(GentMood.Happy);
                 break;
             case FoodPreferenceLevel.Disliked:
-                MoodService.Instance.SetMood(PetMood.Sad);
+                MoodService.Instance.SetMood(GentMood.Sad);
                 break;
         }
 

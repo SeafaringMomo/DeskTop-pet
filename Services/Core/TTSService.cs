@@ -1,6 +1,6 @@
 using System.Speech.Synthesis;
 
-namespace DesktopPetCSharp.Services;
+namespace DesktopGent.Services.Core;
 
 /// <summary>
 /// 文本转语音服务，对应原 Python 项目 txtToVoice_1.py 中的 TxtToVoice1（基于 pyttsx3）。

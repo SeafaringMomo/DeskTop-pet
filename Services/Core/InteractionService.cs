@@ -1,6 +1,6 @@
-using DesktopPetCSharp.Models;
+using DesktopGent.Models;
 
-namespace DesktopPetCSharp.Services;
+namespace DesktopGent.Services.Core;
 
 /// <summary>
 /// 互动服务（P8）：管理抚摸/击掌/玩耍的冷却与好感度奖励。
@@ -88,10 +88,10 @@ public sealed class InteractionService
         switch (action)
         {
             case "pat":
-                MoodService.Instance.SetMood(PetMood.Happy);
+                MoodService.Instance.SetMood(GentMood.Happy);
                 break;
             case "highfive":
-                MoodService.Instance.SetMood(PetMood.Excited);
+                MoodService.Instance.SetMood(GentMood.Excited);
                 break;
         }
 
@@ -99,7 +99,7 @@ public sealed class InteractionService
         if (!string.Equals(beforeLevel.Name, level.Name, StringComparison.Ordinal) &&
             beforeLevel.Min < level.Min)
         {
-            MoodService.Instance.SetMood(PetMood.Excited, 60_000);
+            MoodService.Instance.SetMood(GentMood.Excited, 60_000);
         }
 
         return new InteractResult
@@ -117,7 +117,7 @@ public sealed class InteractionService
 
     private int GetCooldownSeconds(string action)
     {
-        var cd = ConfigService.LoadPetManagement().Cooldown;
+        var cd = ConfigService.LoadGentManagement().Cooldown;
         return action switch
         {
             "pat" => cd.Pat,
@@ -130,7 +130,7 @@ public sealed class InteractionService
 
     private int GetReward(string action)
     {
-        var r = ConfigService.LoadPetManagement().Rewards;
+        var r = ConfigService.LoadGentManagement().Rewards;
         return action switch
         {
             "pat" => r.Pat,

@@ -2,7 +2,7 @@ using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace DesktopPetCSharp.Services.MCP;
+namespace DesktopGent.Services.MCP;
 
 /// <summary>
 /// MCP（Model Context Protocol）服务器接口。预留扩展，便于后续接入真实的 MCP 服务器

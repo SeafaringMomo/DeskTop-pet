@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 
-namespace DesktopPetCSharp.Services.AI;
+namespace DesktopGent.Services.AI;
 
 /// <summary>
 /// AI 提供方注册表。运行时可注册多个提供方并切换默认。

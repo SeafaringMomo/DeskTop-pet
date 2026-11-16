@@ -1,6 +1,6 @@
 using YamlDotNet.Serialization;
 
-namespace DesktopPetCSharp.Models;
+namespace DesktopGent.Models;
 
 /// <summary>
 /// 用户档案，对应 user_data/users/&lt;name&gt;/profile.yaml。
@@ -8,7 +8,7 @@ namespace DesktopPetCSharp.Models;
 ///
 /// 字段分组：
 /// - 基础信息：name / role / scale / default_provider / created_at / last_login_at
-/// - 经济系统：coins / unlocked_skins / current_skins
+/// - 经济系统：coins
 /// - 好感度：affinity / last_interaction
 /// - 饱食度：satiety / satiety_low_since
 /// - 背包：inventory
@@ -21,9 +21,9 @@ public class UserProfile
     [YamlMember(Alias = "name")]
     public string Name { get; set; } = "";
 
-    /// <summary>当前角色（中文，如 路飞）</summary>
+    /// <summary>当前角色（中文，如 默认角色）</summary>
     [YamlMember(Alias = "role")]
-    public string Role { get; set; } = "路飞";
+    public string Role { get; set; } = "默认角色";
 
     /// <summary>当前缩放比例</summary>
     [YamlMember(Alias = "scale")]
@@ -46,14 +46,6 @@ public class UserProfile
     /// <summary>金币余额</summary>
     [YamlMember(Alias = "coins")]
     public int Coins { get; set; } = 100;
-
-    /// <summary>已解锁皮肤 ID 列表</summary>
-    [YamlMember(Alias = "unlocked_skins")]
-    public List<string> UnlockedSkins { get; set; } = new();
-
-    /// <summary>各角色当前装备的皮肤 ID（角色中文名 → 皮肤 ID）</summary>
-    [YamlMember(Alias = "current_skins")]
-    public Dictionary<string, string> CurrentSkins { get; set; } = new();
 
     // ===== 好感度系统 =====
 
@@ -88,13 +80,6 @@ public class UserProfile
 
     /// <summary>获取角色的饱食度（默认初始值）。</summary>
     public int GetSatiety(string role) => Satiety.TryGetValue(role, out var v) ? v : 50;
-
-    /// <summary>获取角色当前皮肤 ID（未设置返回空，由 SkinService 决定默认皮肤）。</summary>
-    public string GetCurrentSkin(string role)
-        => CurrentSkins.TryGetValue(role, out var v) ? v : "";
-
-    /// <summary>设置角色当前皮肤 ID。</summary>
-    public void SetCurrentSkin(string role, string skinId) => CurrentSkins[role] = skinId;
 
     /// <summary>获取背包中食物数量。</summary>
     public int GetInventory(string foodId) => Inventory.TryGetValue(foodId, out var v) ? v : 0;

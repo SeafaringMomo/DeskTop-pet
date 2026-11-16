@@ -1,3 +1,4 @@
+using DesktopGent.Services.Core;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
@@ -6,7 +7,7 @@ using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace DesktopPetCSharp.Services.MCP;
+namespace DesktopGent.Services.MCP;
 
 /// <summary>
 /// HTTP/SSE 传输的 MCP 服务器客户端：通过 HTTP POST 发送 JSON-RPC 请求。
@@ -48,7 +49,7 @@ public sealed class SseMcpServer : IMcpServer
             ["capabilities"] = new JsonObject(),
             ["clientInfo"] = new JsonObject
             {
-                ["name"] = "DesktopPetCSharp",
+                ["name"] = "DesktopGent",
                 ["version"] = "1.0.0"
             }
         };

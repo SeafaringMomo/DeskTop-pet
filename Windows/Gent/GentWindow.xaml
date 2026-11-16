@@ -1,0 +1,24 @@
+<Window x:Class="DesktopGent.Windows.GentWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="DesktopGent"
+        Width="120" Height="150"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ResizeMode="NoResize"
+        WindowStartupLocation="Manual"
+        UseLayoutRounding="True">
+    <Grid>
+        <!-- 像素风渲染：NearestNeighbor 保证硬边像素，不模糊。
+             帧来源为角色目录下的子文件夹（如 01_idle_breath/），窗口尺寸按呼吸帧长宽比固定。 -->
+        <Image x:Name="GentImage"
+               Stretch="Uniform"
+               HorizontalAlignment="Center"
+               VerticalAlignment="Center"
+               RenderOptions.BitmapScalingMode="NearestNeighbor"
+               RenderOptions.EdgeMode="Aliased" />
+    </Grid>
+</Window>

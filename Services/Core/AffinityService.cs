@@ -1,7 +1,7 @@
 using System.Windows.Threading;
-using DesktopPetCSharp.Models;
+using DesktopGent.Models;
 
-namespace DesktopPetCSharp.Services;
+namespace DesktopGent.Services.Core;
 
 /// <summary>
 /// 好感度服务（P6）：管理角色好感度等级、增减、衰减结算。
@@ -42,9 +42,9 @@ public sealed class AffinityService
     /// <summary>根据好感度值获取等级（从高到低匹配，第一个满足 min 的等级生效）。</summary>
     public AffinityLevel GetLevel(int affinity)
     {
-        var levels = ConfigService.LoadPetManagement().Levels;
+        var levels = ConfigService.LoadGentManagement().Levels;
         if (levels.Count == 0)
-            return new AffinityLevel { Min = 0, Name = "陌生人", SkinDiscount = 1.0 };
+            return new AffinityLevel { Min = 0, Name = "陌生人" };
 
         foreach (var lv in levels.OrderByDescending(l => l.Min))
         {
@@ -70,7 +70,7 @@ public sealed class AffinityService
         var user = UserService.Instance.CurrentUser;
         if (user == null) return;
 
-        var mgmt = ConfigService.LoadPetManagement();
+        var mgmt = ConfigService.LoadGentManagement();
 
         // 饱食度加成
         if (applySatietyBonus && delta > 0)
@@ -78,14 +78,14 @@ public sealed class AffinityService
             var satiety = user.GetSatiety(role);
             if (satiety > 80)
             {
-                delta = (int)System.Math.Round(delta * mgmt.Rewards.SatietyHighBonus);
+                delta = (int)Math.Round(delta * mgmt.Rewards.SatietyHighBonus);
             }
         }
 
         if (!user.Affinity.ContainsKey(role))
             user.Affinity[role] = mgmt.Constants.InitialAffinity;
 
-        user.Affinity[role] = System.Math.Clamp(user.Affinity[role] + delta, 0, 100);
+        user.Affinity[role] = Math.Clamp(user.Affinity[role] + delta, 0, 100);
         user.LastInteraction[role] = DateTime.Now.ToString("o");
         UserService.Instance.SaveCurrentProfile();
         Logger.Info("Affinity", $"好感度变化: {role} {delta:+#;-#;0} → {user.Affinity[role]}");
@@ -99,9 +99,9 @@ public sealed class AffinityService
         if (user == null) return;
 
         if (!user.Affinity.ContainsKey(role))
-            user.Affinity[role] = ConfigService.LoadPetManagement().Constants.InitialAffinity;
+            user.Affinity[role] = ConfigService.LoadGentManagement().Constants.InitialAffinity;
 
-        user.Affinity[role] = System.Math.Clamp(user.Affinity[role] - delta, 0, 100);
+        user.Affinity[role] = Math.Clamp(user.Affinity[role] - delta, 0, 100);
         UserService.Instance.SaveCurrentProfile();
         Logger.Info("Affinity", $"好感度衰减: {role} -{delta} → {user.Affinity[role]}");
     }
@@ -117,7 +117,7 @@ public sealed class AffinityService
         var elapsed = now - _lastTick;
         _lastTick = now;
 
-        var mgmt = ConfigService.LoadPetManagement();
+        var mgmt = ConfigService.LoadGentManagement();
         var cfg = ConfigService.Load();
 
         foreach (var role in cfg.Roles.Keys)
@@ -140,7 +140,7 @@ public sealed class AffinityService
         }
     }
 
-    private void CheckDailyDecay(UserProfile user, string role, DateTime now, PetManagementConfig mgmt)
+    private void CheckDailyDecay(UserProfile user, string role, DateTime now, GentManagementConfig mgmt)
     {
         if (!user.LastInteraction.TryGetValue(role, out var lastStr)) return;
         if (!DateTime.TryParse(lastStr, out var last)) return;
@@ -160,7 +160,7 @@ public sealed class AffinityService
         }
     }
 
-    private void CheckSatietyLowDecay(UserProfile user, string role, DateTime now, PetManagementConfig mgmt)
+    private void CheckSatietyLowDecay(UserProfile user, string role, DateTime now, GentManagementConfig mgmt)
     {
         var satiety = user.GetSatiety(role);
         var threshold = mgmt.Decay.SatietyLowThreshold;

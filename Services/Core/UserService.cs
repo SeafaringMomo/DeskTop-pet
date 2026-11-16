@@ -1,10 +1,10 @@
 using System.IO;
 using System.Linq;
-using DesktopPetCSharp.Models;
+using DesktopGent.Models;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
-namespace DesktopPetCSharp.Services;
+namespace DesktopGent.Services.Core;
 
 /// <summary>
 /// 用户管理服务（单例）：管理用户注册表（user_data/users.yaml）与各用户档案
@@ -110,7 +110,7 @@ public sealed class UserService
         Directory.CreateDirectory(userDir);
 
         var now = DateTime.Now.ToString("o");
-        var mgmt = ConfigService.LoadPetManagement();
+        var mgmt = ConfigService.LoadGentManagement();
         var profile = new UserProfile
         {
             Name = name,
@@ -121,8 +121,6 @@ public sealed class UserService
             LastLoginAt = now,
             Coins = mgmt.Constants.InitialCoins
         };
-        // 初始化默认皮肤（解锁所有 is_default 皮肤并设为当前皮肤）
-        Services.SkinService.Instance.InitDefaultSkins(profile);
         SaveProfile(profile);
 
         // 加入注册表
@@ -158,7 +156,7 @@ public sealed class UserService
             profile = new UserProfile
             {
                 Name = name,
-                Role = "路飞",
+                Role = "默认角色",
                 Scale = 0.4,
                 DefaultProvider = "local-klee",
                 CreatedAt = entry.CreatedAt
@@ -267,7 +265,6 @@ public sealed class UserService
 
     /// <summary>
     /// 获取上次使用的角色（用于启动时恢复）。
-    /// 优先当前用户档案，其次从旧 user_data/config_pet.yaml 迁移。
     /// </summary>
     public static string? TryGetLastRole()
     {
@@ -281,21 +278,6 @@ public sealed class UserService
                 return svc._pendingRole;
         }
 
-        // 向后兼容：从旧 user_data/config_pet.yaml 读取 role
-        var legacyPath = ConfigService.LegacyUserConfigPath;
-        if (File.Exists(legacyPath))
-        {
-            try
-            {
-                var d = new DeserializerBuilder()
-                    .WithNamingConvention(NullNamingConvention.Instance)
-                    .Build();
-                var legacy = d.Deserialize<PetConfig?>(File.ReadAllText(legacyPath));
-                if (legacy != null && !string.IsNullOrEmpty(legacy.Role))
-                    return legacy.Role;
-            }
-            catch { /* 忽略 */ }
-        }
         return null;
     }
 

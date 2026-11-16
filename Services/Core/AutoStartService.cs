@@ -1,15 +1,15 @@
 using Microsoft.Win32;
 
-namespace DesktopPetCSharp.Services;
+namespace DesktopGent.Services.Core;
 
 /// <summary>
 /// 开机自启动服务：通过注册表 HKCU\Software\Microsoft\Windows\CurrentVersion\Run
-/// 实现开机自动启动桌面宠物。仅影响当前 Windows 用户。
+/// 实现开机自动启动桌面助手。仅影响当前 Windows 用户。
 /// </summary>
 public static class AutoStartService
 {
     private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
-    private const string AppName = "DesktopPetCSharp";
+    private const string AppName = "DesktopGent";
 
     /// <summary>检查当前是否已设置开机自启。</summary>
     public static bool IsEnabled()

@@ -1,7 +1,7 @@
 using System.IO;
 using System.IO.Compression;
 
-namespace DesktopPetCSharp.Services;
+namespace DesktopGent.Services.Core;
 
 /// <summary>
 /// 用户数据导出/导入服务：把当前用户的档案（profile.yaml + todo.db + chat_history.db）

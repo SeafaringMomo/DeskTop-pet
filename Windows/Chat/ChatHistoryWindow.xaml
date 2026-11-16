@@ -1,4 +1,4 @@
-<Window x:Class="DesktopPetCSharp.Windows.ChatHistoryWindow"
+<Window x:Class="DesktopGent.Windows.ChatHistoryWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="对话历史"

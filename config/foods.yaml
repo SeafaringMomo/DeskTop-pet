@@ -8,9 +8,9 @@ foods:
     price: 20
     satiety_gain: 30
     role_preference:
-      路飞: loved          # loved ×1.5 好感度加成
+      默认角色: loved          # loved ×1.5 好感度加成
       索隆: normal         # normal ×1.0
-    description: 路飞的最爱
+    description: 默认角色的最爱
 
   - id: sake
     name: 清酒
@@ -18,7 +18,7 @@ foods:
     price: 30
     satiety_gain: 20
     role_preference:
-      路飞: disliked       # disliked ×0.2 好感度
+      默认角色: disliked       # disliked ×0.2 好感度
       索隆: loved
     description: 索隆最爱的饮料
 
@@ -28,7 +28,7 @@ foods:
     price: 15
     satiety_gain: 25
     role_preference:
-      路飞: normal
+      默认角色: normal
       索隆: normal
     description: 海上的常见食物
 
@@ -38,7 +38,7 @@ foods:
     price: 10
     satiety_gain: 20
     role_preference:
-      路飞: normal
+      默认角色: normal
       索隆: normal
     description: 简单的主食
 
@@ -48,6 +48,6 @@ foods:
     price: 12
     satiety_gain: 15
     role_preference:
-      路飞: normal
+      默认角色: normal
       索隆: disliked
     description: 健康的零食

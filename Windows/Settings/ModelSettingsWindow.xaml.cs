@@ -2,12 +2,12 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
-using DesktopPetCSharp.Models;
-using DesktopPetCSharp.Services;
-using DesktopPetCSharp.Services.AI;
-using DesktopPetCSharp.Services.AI.Providers;
+using DesktopGent.Models;
+using DesktopGent.Services.AI;
+using DesktopGent.Services.AI.Providers;
+using DesktopGent.Services.Core;
 
-namespace DesktopPetCSharp.Windows;
+namespace DesktopGent.Windows;
 
 /// <summary>
 /// 模型设置窗口（P7 增强）。支持：
@@ -26,7 +26,7 @@ public partial class ModelSettingsWindow : Window
         public string Description { get; set; } = "";
     }
 
-    private string _roleName = "路飞";
+    private string _roleName = "默认角色";
 
     public ModelSettingsWindow()
     {
@@ -133,7 +133,7 @@ public partial class ModelSettingsWindow : Window
             Logger.Info("AI", $"切换默认 AI 提供方 -> {item.Name}");
             CurrentLabel.Text = $"当前默认提供方：{item.Name}";
             // 持久化到用户档案
-            try { Services.UserService.Instance.SaveCurrentProfile(); } catch { }
+            try { UserService.Instance.SaveCurrentProfile(); } catch { }
             // 同步 secrets.yaml 的默认 provider（如有需要可扩展）
             MessageBox.Show(this, $"已切换为 {item.Name}", "成功", MessageBoxButton.OK, MessageBoxImage.Information);
         }

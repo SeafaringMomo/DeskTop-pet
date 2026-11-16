@@ -4,21 +4,25 @@ using System.IO;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
-using DesktopPetCSharp.Services;
+using DesktopGent.Services.Core;
 using Microsoft.Win32;
 
-namespace DesktopPetCSharp.Windows;
+namespace DesktopGent.Windows;
 
 /// <summary>
-/// 通用设置窗口（P4.1 + P4.2）：
-/// - 开机自启切换（注册表 HKCU\...\Run）
-/// - 当前用户档案导出/导入（ZIP）
+/// 通用设置窗口：
+/// - 开机自启动切换
+/// - 用户档案导出/导入（ZIP）
+/// - 导入助手角色（把包含 theme.yaml 的文件夹复制到 static/）
 /// - 打开用户数据目录
 /// 配色跟随角色主题。
 /// </summary>
 public partial class SettingsWindow : Window
 {
-    private string _roleName = "路飞";
+    private string _roleName = "默认角色";
+
+    /// <summary>角色导入成功后的回调（通常由 GentWindow 注入，用于刷新角色菜单）。</summary>
+    public Action? OnRoleImported { get; set; }
 
     public SettingsWindow()
     {
@@ -26,7 +30,7 @@ public partial class SettingsWindow : Window
         LoadSettings();
     }
 
-    /// <summary>应用角色配色主题。由 PetWindow/TalkWindow 在打开窗口前调用。</summary>
+    /// <summary>应用角色配色主题。由 GentWindow/TalkWindow 在打开窗口前调用。</summary>
     public void ApplyTheme(string role)
     {
         _roleName = role;
@@ -53,19 +57,17 @@ public partial class SettingsWindow : Window
             AutoStartCheckBox.Foreground = new SolidColorBrush(theme.TextColor);
             UserInfoLabel.Foreground = new SolidColorBrush(theme.TextColor);
 
-            ExportButton.Background = new SolidColorBrush(theme.SurfaceColor);
-            ExportButton.Foreground = new SolidColorBrush(theme.TextColor);
-            ExportButton.BorderBrush = new SolidColorBrush(theme.PrimaryColor);
-
-            ImportButton.Background = new SolidColorBrush(theme.SurfaceColor);
-            ImportButton.Foreground = new SolidColorBrush(theme.TextColor);
-            ImportButton.BorderBrush = new SolidColorBrush(theme.PrimaryColor);
-
-            OpenUserDirButton.Background = new SolidColorBrush(theme.SurfaceColor);
-            OpenUserDirButton.Foreground = new SolidColorBrush(theme.TextColor);
-            OpenUserDirButton.BorderBrush = new SolidColorBrush(theme.PrimaryColor);
+            foreach (var btn in new[] { ExportButton, ImportButton, ImportRoleButton, OpenUserDirButton })
+            {
+                btn.Background = new SolidColorBrush(theme.SurfaceColor);
+                btn.Foreground = new SolidColorBrush(theme.TextColor);
+                btn.BorderBrush = new SolidColorBrush(theme.PrimaryColor);
+            }
         }
-        catch { /* 容错 */ }
+        catch
+        {
+            // 容错
+        }
     }
 
     private static Color WithAlpha(Color c, double alpha)
@@ -76,10 +78,8 @@ public partial class SettingsWindow : Window
 
     private void LoadSettings()
     {
-        // 自启状态
         AutoStartCheckBox.IsChecked = AutoStartService.IsEnabled();
 
-        // 当前用户信息
         var userName = UserService.Instance.CurrentUserName;
         UserInfoLabel.Text = string.IsNullOrEmpty(userName)
             ? "当前用户：未登录"
@@ -99,13 +99,13 @@ public partial class SettingsWindow : Window
         bool ok = enabled ? AutoStartService.Enable() : AutoStartService.Disable();
         if (!ok)
         {
-            MessageBox.Show($"修改开机自启失败，请查看日志。",
+            MessageBox.Show("修改开机自启动失败，请查看日志。",
                 "错误", MessageBoxButton.OK, MessageBoxImage.Warning);
             AutoStartCheckBox.IsChecked = !enabled;
         }
         else
         {
-            Logger.Info("UI", $"设置：开机自启 -> {(enabled ? "启用" : "禁用")}");
+            Logger.Info("UI", $"设置：开机自启动 -> {(enabled ? "启用" : "禁用")}");
         }
     }
 
@@ -145,7 +145,6 @@ public partial class SettingsWindow : Window
         };
         if (dlg.ShowDialog() != true) return;
 
-        // 询问目标用户名
         var userName = UserService.Instance.CurrentUserName;
         var inputDlg = new InputDialog(
             "导入用户档案",
@@ -156,7 +155,6 @@ public partial class SettingsWindow : Window
             return;
         var targetName = inputDlg.Result.Trim();
 
-        // 登出当前用户，释放数据库连接
         if (UserService.Instance.CurrentUser != null)
         {
             UserService.Instance.Logout();
@@ -171,6 +169,70 @@ public partial class SettingsWindow : Window
         else
         {
             MessageBox.Show("导入失败，请查看日志。", "错误");
+        }
+    }
+
+    /// <summary>
+    /// 导入助手角色：用户选择包含 theme.yaml 的文件夹，程序复制到 static/&lt;文件夹名&gt;/。
+    /// 成功后通知 GentWindow 刷新角色菜单。
+    /// </summary>
+    private void ImportRoleButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new OpenFolderDialog
+        {
+            Title = "选择要导入的角色文件夹（需包含 theme.yaml）"
+        };
+        if (dlg.ShowDialog() != true) return;
+
+        var source = dlg.FolderName;
+        if (string.IsNullOrWhiteSpace(source)) return;
+
+        var themePath = Path.Combine(source, ConfigService.ThemeFileName);
+        if (!File.Exists(themePath))
+        {
+            MessageBox.Show("所选文件夹内没有 theme.yaml，无法导入。", "导入失败",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var folderName = Path.GetFileName(source.TrimEnd('\\', '/'));
+        if (string.IsNullOrWhiteSpace(folderName))
+        {
+            MessageBox.Show("无法识别文件夹名，请重试。", "导入失败",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var target = Path.Combine(App.BaseDir, "static", folderName);
+        if (Directory.Exists(target))
+        {
+            MessageBox.Show($"static/{folderName} 已存在，请先重命名或删除后再导入。", "导入失败",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        try
+        {
+            Directory.CreateDirectory(target);
+            foreach (var file in Directory.GetFiles(source, "*", SearchOption.AllDirectories))
+            {
+                var rel = Path.GetRelativePath(source, file);
+                var dest = Path.Combine(target, rel);
+                Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+                File.Copy(file, dest, overwrite: true);
+            }
+
+            Logger.Info("UI", $"导入角色：{source} -> static/{folderName}");
+            ConfigService.InvalidateCache();
+            OnRoleImported?.Invoke();
+            MessageBox.Show("角色导入成功，请在托盘「角色」菜单中切换。", "导入成功",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("UI", "导入角色失败", ex);
+            MessageBox.Show("导入失败，请查看日志。", "错误",
+                MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 

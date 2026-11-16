@@ -1,10 +1,10 @@
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
-using DesktopPetCSharp.Services.AI;
-using DesktopPetCSharp.Services.MCP;
+using DesktopGent.Services.Core;
+using DesktopGent.Services.MCP;
 
-namespace DesktopPetCSharp.Services;
+namespace DesktopGent.Services.AI;
 
 /// <summary>
 /// 聊天编排器：在 <see cref="IAiProvider"/> 与 <see cref="McpManager"/> 之间执行多轮对话 + 工具调用循环。
@@ -28,12 +28,12 @@ public sealed class ChatOrchestrator
 
     private static string BuildDefaultSystemPrompt()
     {
-        var role = "路飞";
+        var role = "默认角色";
         try { role = ConfigService.Load().Role; } catch { /* 配置读取失败用默认 */ }
         var hint = "";
-        try { hint = Services.AffinityService.Instance.GetSystemPromptHint(role); } catch { /* 未登录时忽略 */ }
+        try { hint = AffinityService.Instance.GetSystemPromptHint(role); } catch { /* 未登录时忽略 */ }
         return
-            $"你是桌面宠物『{role}』。回答要活泼可爱、保持角色一致性，使用中文。" +
+            $"你是桌面助手『{role}』。回答要活泼可爱、保持角色一致性，使用中文。" +
             "如果有需要，可以借助工具帮用户管理待办事项。" +
             hint;
     }
@@ -80,7 +80,7 @@ public sealed class ChatOrchestrator
             if (!resp.HasToolCalls || !provider.SupportsToolCalling)
             {
                 _history.Add(new ChatMessage { Role = "assistant", Content = resp.Content });
-                // 识别 AI 回复关键词 → 同步情绪（让宠物表情跟着 AI 语气走）
+                // 识别 AI 回复关键词 → 同步情绪（让助手表情跟着 AI 语气走）
                 try { MoodService.Instance.DetectFromMessage(resp.Content); }
                 catch { /* MoodService 异常不影响主流程 */ }
                 return resp.Content;

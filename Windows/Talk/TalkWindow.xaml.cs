@@ -2,14 +2,15 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
-using DesktopPetCSharp.Models;
-using DesktopPetCSharp.Services;
+using DesktopGent.Models;
+using DesktopGent.Services.AI;
+using DesktopGent.Services.Core;
 
-namespace DesktopPetCSharp.Windows;
+namespace DesktopGent.Windows;
 
 /// <summary>
 /// 聊天窗口，对应原 Python 项目 talkwindow.py 的 TalkWindow 类。
-/// 配色随角色切换（路飞=草帽黄/红/棕；索隆=绿/棕等），由 <see cref="ApplyTheme"/> 应用。
+/// 配色随角色切换（默认角色=草帽黄/红/棕；索隆=绿/棕等），由 <see cref="ApplyTheme"/> 应用。
 /// 输入回车后通过 <see cref="ChatOrchestrator"/> 调用当前默认 AI 提供方，
 /// 若提供方支持工具调用，会自动经由 MCP 服务器管理待办等外部能力。
 /// 标题栏右侧"⚙ 模型"按钮可打开模型设置窗口切换 AI 提供方。
@@ -51,7 +52,7 @@ public partial class TalkWindow : Window
     }
 
     /// <summary>
-    /// 应用角色配色主题。由 PetWindow.Switch() 在切换角色时调用，
+    /// 应用角色配色主题。由 GentWindow.Switch() 在切换角色时调用，
     /// 实现"切换角色即切换配色"——配色与角色解耦，统一从 config 读取。
     /// </summary>
     public void ApplyTheme(string role)
@@ -126,7 +127,7 @@ public partial class TalkWindow : Window
             // 持久化用户消息到对话记录
             PersistMessage("user", text);
             // P9: 聊天联动好感度 +1（带上饱食度加成）
-            try { AffinityService.Instance.AddAffinity(_roleName, ConfigService.LoadPetManagement().Rewards.ChatPerMessage, applySatietyBonus: true); }
+            try { AffinityService.Instance.AddAffinity(_roleName, ConfigService.LoadGentManagement().Rewards.ChatPerMessage, applySatietyBonus: true); }
             catch (Exception ex) { Logger.Warn("Talk", $"聊天好感度加成失败：{ex.Message}"); }
             // 后台线程处理，避免阻塞 UI
             _ = Task.Run(() => ProcessAsync(text));

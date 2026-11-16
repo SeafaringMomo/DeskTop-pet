@@ -4,7 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
-namespace DesktopPetCSharp.Services.AI.Providers;
+namespace DesktopGent.Services.AI.Providers;
 
 /// <summary>
 /// OpenAI 兼容（Chat Completions /v1/chat/completions）的通用 HTTP 适配器。

@@ -1,8 +1,8 @@
 using System.IO;
-using DesktopPetCSharp.Models;
+using DesktopGent.Models;
 using Microsoft.Data.Sqlite;
 
-namespace DesktopPetCSharp.Services;
+namespace DesktopGent.Services.Data;
 
 /// <summary>
 /// 对话记录仓储：把用户与 AI 的对话持久化到 SQLite。
@@ -144,7 +144,7 @@ public sealed class ChatHistoryRepository
         cmd.Parameters.AddWithValue("@tn", (object?)toolName ?? DBNull.Value);
         var title = (content ?? "").Length > 20
             ? (content ?? "").Substring(0, 20) + "…"
-            : (content ?? "");
+            : content ?? "";
         cmd.Parameters.AddWithValue("@title", string.IsNullOrEmpty(title) ? "新对话" : title);
         cmd.ExecuteNonQuery();
     }

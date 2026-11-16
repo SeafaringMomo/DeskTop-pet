@@ -1,16 +1,16 @@
 using System.Threading;
 
-namespace DesktopPetCSharp.Services;
+namespace DesktopGent.Services.Core;
 
 /// <summary>
-/// 单实例检测器：使用命名 Mutex 保证整个系统只运行一个桌面宠物实例。
+/// 单实例检测器：使用命名 Mutex 保证整个系统只运行一个桌面助手实例。
 /// 对应 AGENTS.md §4.2 并发限制（多实例同时写同一用户档案会冲突）。
 ///
 /// 用法：
 /// <code>
 /// if (!SingleInstance.TryAcquire(out var mutex))
 /// {
-///     MessageBox.Show("桌面宠物已经在运行中");
+///     MessageBox.Show("桌面助手已经在运行中");
 ///     Shutdown();
 /// }
 /// // 应用退出时调用 mutex.ReleaseMutex() 或让其随进程结束自动释放
@@ -18,7 +18,7 @@ namespace DesktopPetCSharp.Services;
 /// </summary>
 public static class SingleInstance
 {
-    private const string MutexName = "DesktopPetCSharp_SingleInstance_Mutex";
+    private const string MutexName = "DesktopGent_SingleInstance_Mutex";
 
     /// <summary>
     /// 尝试获取单实例 Mutex。若已存在则返回 false。

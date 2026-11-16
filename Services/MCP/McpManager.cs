@@ -2,9 +2,9 @@ using System.Collections.Concurrent;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
-using DesktopPetCSharp.Services.AI;
+using DesktopGent.Services.AI;
 
-namespace DesktopPetCSharp.Services.MCP;
+namespace DesktopGent.Services.MCP;
 
 /// <summary>
 /// MCP 服务器管理器：聚合多个 <see cref="IMcpServer"/>，向 AI 层统一暴露工具列表，
