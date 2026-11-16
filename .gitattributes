@@ -1,14 +1,25 @@
-# ´úÂëÎÄ¼şÍ³Ò»²Ö¿âLF£¬±¾µØWindows×Ô¶¯CRLF
-*.cs     text eol=lf
-*.xaml   text eol=lf
-*.csproj text eol=lf
-*.md     text eol=lf
-*.txt    text eol=lf
-*.gitignore text eol=lf
-LICENSE  text eol=lf
+# æ–‡æœ¬æ–‡ä»¶ç»Ÿä¸€ä½¿ç”¨ LF å­˜å‚¨ï¼ˆè·¨å¹³å°ä¸€è‡´ï¼Œé¿å… CRLF æ··ä¹±ï¼‰
+* text=auto eol=lf
 
-# ¶ş½øÖÆÎÄ¼ş²»×ª»»
+*.cs            text eol=lf
+*.xaml          text eol=lf
+*.csproj        text eol=lf
+*.sln           text eol=lf
+*.md            text eol=lf
+*.txt           text eol=lf
+*.yaml          text eol=lf
+*.yml           text eol=lf
+*.json          text eol=lf
+*.gitignore     text eol=lf
+*.gitattributes text eol=lf
+LICENSE         text eol=lf
+
+# äºŒè¿›åˆ¶æ–‡ä»¶ä¸åšè½¬æ¢
 *.png    binary
 *.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.ico    binary
 *.exe    binary
 *.dll    binary
+*.db     binary
