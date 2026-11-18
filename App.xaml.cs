@@ -179,6 +179,9 @@ public partial class App : Application
         // 5) 用户登录后：失效配置缓存（让后续 Load() 用 CurrentUser.Role 覆盖默认角色）
         ConfigService.InvalidateCache();
 
+        // 5.1) 恢复该用户上次选择的默认 AI 提供方
+        ApplyUserProviderPreference();
+
         // 6) 初始化待办数据库（按用户隔离）、注册 MCP、打开助手窗口
         var userDir = UserService.Instance.CurrentUserDir;
         var todoDbPath = Path.Combine(userDir, "todo.db");
@@ -203,6 +206,139 @@ public partial class App : Application
 
         // 9) 启动好感度衰减后台计时器
         AffinityService.Instance.Start();
+
+        // 10) 启动 Python Agent sidecar（异步，不阻塞 UI；失败则回退到其他提供方）
+        await StartAgentSidecarAsync();
+    }
+
+    /// <summary>
+    /// 启动工具桥与 Python Agent sidecar。
+    ///
+    /// 顺序：工具桥（C# 侧）→ sidecar（Python 侧，需要桥地址才能加载待办工具）。
+    /// 失败仅记录日志并保留原有 Provider，不影响应用可用性。
+    /// </summary>
+    private static async Task StartAgentSidecarAsync()
+    {
+        var secrets = ConfigService.LoadSecrets();
+        var agent = secrets.Agent;
+        if (!agent.Enabled || !agent.AutoStart)
+        {
+            Logger.Info("Agent", $"Python Agent 未启用（enabled={agent.Enabled}，auto_start={agent.AutoStart}）");
+            return;
+        }
+
+        // 选择 sidecar 使用的在线模型：第一个启用的 openai-compatible
+        var llm = secrets.AiProviders.FirstOrDefault(p =>
+            p.Enabled &&
+            p.Type == "openai-compatible" &&
+            !string.IsNullOrWhiteSpace(p.ApiKey));
+        if (llm == null)
+        {
+            Logger.Warn("Agent", "没有已启用的 openai-compatible 提供方，跳过 sidecar（请先在模型设置中配置 API Key）");
+            return;
+        }
+
+        // 1) 起工具桥，再把地址与令牌交给 sidecar
+        if (AgentToolBridge.Instance.Start())
+        {
+            AgentSidecarService.Instance.ToolBridgeUrl = AgentToolBridge.Instance.BaseUrl;
+            AgentSidecarService.Instance.ToolBridgeToken = AgentToolBridge.Instance.Token;
+        }
+
+        // 2) 起 sidecar
+        //    意外退出时不自动重启（避免崩溃循环），但必须把默认提供方摘下来，
+        //    否则 PythonAgentProvider 会持续对着已死端口发请求
+        var sidecar = AgentSidecarService.Instance;
+        sidecar.UnexpectedExit -= OnSidecarUnexpectedExit;
+        sidecar.UnexpectedExit += OnSidecarUnexpectedExit;
+
+        var ready = await AgentSidecarService.Instance.StartAsync(
+            UserService.Instance.CurrentUserName,
+            ConfigService.Load().Role,
+            llm,
+            agent);
+
+        if (!ready) return;
+
+        // 3) sidecar 就绪后才切换默认提供方：
+        //    否则 python-agent 会在启动前抢占默认，导致首条消息必然失败
+        //    例外：用户明确选过别的在线提供方（既非 local-klee 占位也非未选择）时尊重其选择
+        var preferred = UserService.Instance.CurrentUser?.DefaultProvider ?? "";
+        var userPickedOther = preferred is not ("" or "local-klee" or "python-agent");
+        if (userPickedOther)
+        {
+            Logger.Info("Agent", $"sidecar 就绪，但用户已选定默认提供方 {preferred}，不自动切换");
+            return;
+        }
+
+        if (AiProviderRegistry.Instance.TrySetDefault("python-agent"))
+            Logger.Info("Agent", "默认 AI 提供方已切换为 python-agent");
+        else
+            Logger.Warn("Agent", "python-agent 未注册，保持当前默认提供方");
+    }
+
+    /// <summary>
+    /// 恢复用户档案里保存的默认 AI 提供方。
+    ///
+    /// 约束：登录时尚不确定 sidecar 能否就绪，所以跳过 python-agent
+    /// （就绪后由 <see cref="StartAgentSidecarAsync"/> 再切换，AGENTS.md §7.4）。
+    /// 提供方不存在时保持当前默认并记日志。
+    /// </summary>
+    private static void ApplyUserProviderPreference()
+    {
+        var profile = UserService.Instance.CurrentUser;
+        if (profile == null) return;
+
+        var name = profile.DefaultProvider;
+        if (string.IsNullOrWhiteSpace(name) || name == "python-agent") return;
+
+        var registry = AiProviderRegistry.Instance;
+        if (!registry.Names.Contains(name))
+        {
+            Logger.Info("AI", $"用户偏好提供方 {name} 未注册，保持默认 {registry.DefaultName}");
+            return;
+        }
+        if (registry.TrySetDefault(name))
+            Logger.Info("AI", $"按用户档案恢复默认 AI 提供方：{name}");
+    }
+
+    /// <summary>
+    /// sidecar 意外退出：把默认提供方回退到非 python-agent 的可用项。
+    ///
+    /// 与启动阶段的回退逻辑一致（AGENTS.md §7.1 兜底不可移除）：
+    /// 优先其他在线提供方，其次 local-klee。
+    /// </summary>
+    private static void OnSidecarUnexpectedExit(string reason)
+    {
+        var registry = AiProviderRegistry.Instance;
+        if (registry.DefaultName != "python-agent")
+        {
+            Logger.Warn("Agent", $"{reason}；当前默认提供方不是 python-agent，无需回退");
+            return;
+        }
+
+        var fallback = registry.Names.FirstOrDefault(n => n != "python-agent")
+            ?? (registry.Names.Contains("local-klee") ? "local-klee" : null);
+        if (fallback != null && registry.TrySetDefault(fallback))
+            Logger.Warn("Agent", $"{reason}；默认提供方已回退为 {fallback}");
+        else
+            Logger.Error("Agent", $"{reason}；没有可回退的 AI 提供方");
+    }
+
+    /// <summary>
+    /// 应用退出：释放 sidecar 与工具桥（AGENTS.md §6.6）。
+    /// 必须在 Shutdown 前完成，否则子进程会成为孤儿。
+    /// </summary>
+    protected override void OnExit(ExitEventArgs e)
+    {
+        try { AgentSidecarService.Instance.Stop(); }
+        catch (Exception ex) { Logger.Error("Agent", "停止 sidecar 失败", ex); }
+
+        try { AgentToolBridge.Instance.Dispose(); }
+        catch (Exception ex) { Logger.Error("Agent", "停止工具桥失败", ex); }
+
+        Logger.Info("App", "应用退出清理完成");
+        base.OnExit(e);
     }
 
     /// <summary>
@@ -243,6 +379,21 @@ public partial class App : Application
                 anyRegistered = true;
                 Logger.Info("App", $"注册 AI 提供商（openai-compatible）：{p.Name}，model={p.Model}");
             }
+            else if (p.Type == "python-agent")
+            {
+                if (!secrets.Agent.Enabled)
+                {
+                    Logger.Warn("App", $"跳过 AI 提供商 {p.Name}：agent.enabled=false");
+                    continue;
+                }
+                registry.Register(new PythonAgentProvider
+                {
+                    Name = p.Name,
+                    TimeoutSeconds = Math.Max(10, secrets.Agent.RequestTimeoutSeconds)
+                });
+                anyRegistered = true;
+                Logger.Info("App", $"注册 AI 提供商（python-agent）：{p.Name}");
+            }
         }
 
         // 回退：若 secrets.yaml 没配置任何 provider，尝试环境变量
@@ -258,11 +409,22 @@ public partial class App : Application
         }
 
         Logger.Info("App", $"已注册 AI 提供商：{string.Join(", ", registry.Names)}");
+
+        // 启动阶段不要选中 python-agent：此时 sidecar 尚未拉起，选中会导致首条消息失败。
+        // 真正的切换在 StartAgentSidecarAsync 健康检查通过后进行。
+        if (registry.DefaultName == "python-agent")
+        {
+            var fallback = registry.Names.FirstOrDefault(n => n != "python-agent");
+            if (fallback != null)
+            {
+                registry.TrySetDefault(fallback);
+                Logger.Info("App", $"启动阶段默认提供方暂设为 {fallback}（等待 sidecar 就绪）");
+            }
+        }
     }
 
     private static void TryRegisterOpenAiCompatible(AiProviderRegistry registry)
-    {
-        var key = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
+    {        var key = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
         if (string.IsNullOrWhiteSpace(key)) return;
 
         registry.Register(new OpenAiCompatibleProvider

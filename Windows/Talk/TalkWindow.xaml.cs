@@ -26,6 +26,12 @@ public partial class TalkWindow : Window
     /// <summary>当前会话 ID（对话记录持久化用）。null 表示尚未创建会话（首次发消息时创建）。</summary>
     private long? _sessionId;
 
+    /// <summary>当前进行中的流式请求取消源。再次发送或关窗时取消。</summary>
+    private CancellationTokenSource? _streamCts;
+
+    /// <summary>流式输出中：当前行是否已有角色前缀（避免每个 chunk 都加）。</summary>
+    private bool _streamRowOpen;
+
     public TalkWindow()
     {
         InitializeComponent();
@@ -135,24 +141,162 @@ public partial class TalkWindow : Window
         }
     }
 
-    /// <summary>对应原 Python async_process() 方法。调用 ChatOrchestrator 完成多轮对话+工具调用。</summary>
+    /// <summary>
+    /// 处理一条用户消息：优先流式（Python Agent），否则回退到一次性返回。
+    /// 对应原 Python async_process() 方法。
+    /// </summary>
     private async Task ProcessAsync(string text)
     {
+        _streamCts?.Cancel();
+        _streamCts = new CancellationTokenSource();
+        var ct = _streamCts.Token;
+
+        var provider = AiProviderRegistry.Instance.Default;
+        if (provider is IStreamingAiProvider)
+        {
+            await ProcessStreamAsync(text, ct);
+            return;
+        }
+
+        // 回退：旧的一次性路径（C# 内部工具循环）
         try
         {
-            var reply = await _chat.TalkAsync(text);
+            var reply = await _chat.TalkAsync(text, ct);
             Dispatcher.Invoke(() => AppendOutput($"{_roleName}：{reply}"));
             Logger.Info("Talk", $"AI 回复：{reply}");
-            // 持久化 AI 回复到对话记录
             PersistMessage("assistant", reply);
-            _tts.Speak(reply); // 同步朗读，已在后台线程
-            Logger.Info("Talk", "TTS 朗读完成");
+            _tts.Speak(reply);
+        }
+        catch (OperationCanceledException)
+        {
+            Logger.Info("Talk", "请求已取消");
         }
         catch (Exception ex)
         {
             Dispatcher.Invoke(() => AppendOutput($"[出错] {ex.Message}"));
             Logger.Error("Talk", "处理消息失败", ex);
         }
+    }
+
+    /// <summary>
+    /// 流式处理：边收边渲染，工具调用以状态行提示。
+    /// </summary>
+    private async Task ProcessStreamAsync(string text, CancellationToken ct)
+    {
+        var sessionId = EnsureSession();
+        var final = new System.Text.StringBuilder();
+        var errored = false;
+
+        try
+        {
+            Dispatcher.Invoke(() => SetStatus("思考中…", visible: true));
+
+            await foreach (var ev in _chat.TalkStreamAsync(text, sessionId.ToString(), ct))
+            {
+                switch (ev.Kind)
+                {
+                    case "chunk":
+                        final.Append(ev.Text);
+                        var chunk = ev.Text;
+                        Dispatcher.Invoke(() => AppendChunk(chunk));
+                        break;
+
+                    case "tool_start":
+                        Logger.Info("Agent", $"工具开始：{ev.ToolName}");
+                        Dispatcher.Invoke(() => SetStatus($"🔧 {ev.ToolName}…", true));
+                        break;
+
+                    case "tool_finish":
+                        Logger.Info("Agent", $"工具完成：{ev.ToolName}（is_error={ev.IsError}）");
+                        Dispatcher.Invoke(() => SetStatus(
+                            ev.IsError ? $"⚠ {ev.ToolName} 失败" : $"✅ {ev.ToolName} 完成", true));
+                        break;
+
+                    case "step_start":
+                        Dispatcher.Invoke(() => SetStatus($"第 {ev.Step} 步…", true));
+                        break;
+
+                    case "error":
+                        errored = true;
+                        Logger.Error("Agent", $"Agent 返回错误：{ev.ErrorMessage}");
+                        Dispatcher.Invoke(() => AppendOutput($"[出错] {ev.ErrorMessage}"));
+                        break;
+
+                    case "done":
+                        if (final.Length == 0 && !string.IsNullOrEmpty(ev.FinalContent))
+                            final.Append(ev.FinalContent);
+                        break;
+                }
+            }
+
+            var reply = final.ToString();
+            Dispatcher.Invoke(() =>
+            {
+                CloseStreamRow();
+                SetStatus("", visible: false);
+            });
+
+            if (!errored && !string.IsNullOrEmpty(reply))
+            {
+                Logger.Info("Talk", $"AI 流式回复完成，长度={reply.Length}");
+                PersistMessage("assistant", reply);
+                _tts.Speak(reply);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            Logger.Info("Talk", "流式请求已取消");
+            Dispatcher.Invoke(() => { CloseStreamRow(); SetStatus("", false); });
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("Talk", "流式处理失败", ex);
+            Dispatcher.Invoke(() =>
+            {
+                CloseStreamRow();
+                SetStatus("", false);
+                AppendOutput($"[出错] {ex.Message}");
+            });
+        }
+    }
+
+    /// <summary>确保当前会话存在，返回会话 ID。</summary>
+    private long EnsureSession()
+    {
+        if (_sessionId != null) return _sessionId.Value;
+        var repo = App.ChatHistory;
+        if (repo == null) return 0;
+        var session = repo.CreateSession(_roleName, GetCurrentProviderName());
+        _sessionId = session.Id;
+        return session.Id;
+    }
+
+    /// <summary>追加一段流式文本：首段带角色前缀，后续直接续写。</summary>
+    private void AppendChunk(string chunk)
+    {
+        if (!_streamRowOpen)
+        {
+            OutputBox.AppendText($"{_roleName}：");
+            _streamRowOpen = true;
+        }
+        OutputBox.AppendText(chunk);
+        OutputBox.ScrollToEnd();
+    }
+
+    /// <summary>结束当前流式行（换行）。</summary>
+    private void CloseStreamRow()
+    {
+        if (!_streamRowOpen) return;
+        OutputBox.AppendText(Environment.NewLine);
+        OutputBox.ScrollToEnd();
+        _streamRowOpen = false;
+    }
+
+    /// <summary>更新状态行。</summary>
+    private void SetStatus(string text, bool visible)
+    {
+        StatusText.Text = text;
+        StatusText.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>把消息写入对话记录数据库（若 ChatHistory 不可用则忽略）。</summary>
@@ -163,7 +307,7 @@ public partial class TalkWindow : Window
             var repo = App.ChatHistory;
             if (repo == null) return;
             // 首次发消息时创建会话
-            if (_sessionId == null)
+            if (_sessionId == null || _sessionId.Value == 0)
             {
                 var session = repo.CreateSession(_roleName, GetCurrentProviderName());
                 _sessionId = session.Id;
@@ -196,7 +340,8 @@ public partial class TalkWindow : Window
         if (repo == null) return;
         OutputBox.Clear();
         AppendOutput($"（已加载历史会话 #{sessionId}）");
-        foreach (var m in repo.GetMessages(sessionId))
+        var messages = repo.GetMessages(sessionId);
+        foreach (var m in messages)
         {
             var who = m.Role switch
             {
@@ -207,6 +352,13 @@ public partial class TalkWindow : Window
             };
             AppendOutput($"{who}：{m.Content}");
         }
+
+        // 同步到编排器历史，使后续流式对话具备上下文
+        // 工具消息不进入 C# 历史（Python 侧每轮会重新归一化，tool 消息缺 ID 时会被丢弃）
+        _chat.LoadHistory(messages
+            .Where(m => m.Role is "user" or "assistant")
+            .Select(m => new ChatMessage { Role = m.Role, Content = m.Content }));
+
         _sessionId = sessionId;
         Logger.Info("Talk", $"加载历史会话 #{sessionId}，消息数={OutputBox.LineCount}");
     }
@@ -314,6 +466,9 @@ public partial class TalkWindow : Window
 
     protected override void OnClosing(CancelEventArgs e)
     {
+        try { _streamCts?.Cancel(); } catch { /* 已释放 */ }
+        _streamCts?.Dispose();
+        _streamCts = null;
         _speech.Dispose();
         _tts.Dispose();
         Logger.Info("Talk", "聊天窗口关闭");

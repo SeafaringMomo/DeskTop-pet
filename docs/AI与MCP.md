@@ -89,6 +89,35 @@ public interface IAiProvider
 - 字段：`Name` / `BaseUrl` / `ApiKey` / `Model`
 - 通过 `config/secrets.yaml` 配置，可在运行时通过模型设置窗口增删改
 
+### PythonAgentProvider
+
+- 指向本地 Python Agent sidecar（`Services/AI/AgentSidecarService.cs` 拉起），走 HTTP + SSE
+- 同时实现 `IAiProvider` 与 `IStreamingAiProvider`：聊天窗口逐字渲染、显示工具调用状态
+- `SupportsToolCalling = false`：**工具循环在 Python 侧完成**，C# 不再注入 MCP 工具（避免工具被执行两次）
+- 未就绪时抛异常，由上层回退到 `openai-compatible` / `local-klee`
+- **运行期回退**：sidecar 进程崩溃（`Exited` 事件）或请求连接失败时，`AgentSidecarService` 置为未就绪并触发
+  `UnexpectedExit`，`App` 把默认提供方回退到其他提供方；不自动重启 sidecar
+- 详见 [Python-Agent.md](Python-Agent.md)
+
+### 流式接口（IStreamingAiProvider）
+
+```csharp
+IAsyncEnumerable<AgentEvent> ChatStreamAsync(
+    AiRequest request, string sessionId, string user, string role,
+    string? levelHint, CancellationToken ct = default);
+```
+
+事件类型（与 Python SSE 事件名一一对应，改一侧必须改另一侧）：
+
+| Kind | 含义 |
+|---|---|
+| `session` | 会话 ID 确认 |
+| `step_start` / `step_finish` | 工具循环轮次起止 |
+| `chunk` | 增量文本（逐字渲染） |
+| `tool_start` / `tool_finish` | 工具调用开始/结束 |
+| `done` | 最终完整文本（落库 + TTS 的触发点） |
+| `error` | 错误，`ErrorMessage` 带原因 |
+
 ## 聊天编排器（ChatOrchestrator）
 
 在 `IAiProvider` 与 `McpManager` 之间执行多轮对话 + 工具调用循环：
@@ -204,15 +233,30 @@ LocalTodoMcpServer → App.Todos.ListAll() → 返回列表
 ## 已知限制
 
 - **OpenAI 工具调用多轮对话**：`ChatOrchestrator` 在历史消息中只保存了文本内容，未携带 OpenAI 协议要求的 `tool_calls` 结构化字段和 `tool_call_id`。单轮工具调用可正常工作，连续多轮工具调用的第二次请求可能被部分严格的 OpenAI 兼容服务拒绝。
+  > 走 `python-agent` 时不受此限制：Python 侧 `normalize_history` 会丢弃不完整的工具消息并重新组织，且当轮的工具往返在 Python 内部完成。
 - **stdio/sse MCP**：当前仅实现 `local` 类型 MCP 服务器；`stdio`/`sse` 类型在 `secrets.yaml` 中可配置但会记录警告跳过。
 
 ## 扩展指引
 
 ### 接入新 AI 后端
 
-两种方式：
+三种方式：
 1. **配置化**（推荐）：在 `config/secrets.yaml` 的 `ai_providers` 列表新增条目（`type: openai-compatible`），或通过「⚙ 模型」窗口的「➕ 新增」按钮添加——变更即时写回 `secrets.yaml` 并注册到 `AiProviderRegistry`
-2. **代码化**：实现 `IAiProvider`，在 `App.RegisterAiProviders` 中调用 `AiProviderRegistry.Instance.Register(...)`
+2. **代码化**：实现 `IAiProvider`（需要逐字输出则同时实现 `IStreamingAiProvider`），在 `App.RegisterAiProviders` 中调用 `AiProviderRegistry.Instance.Register(...)`
+3. **增强 Python Agent**：见 [Python-Agent.md](Python-Agent.md) 的「扩展」一节
+
+### 工具桥（Python → C#）
+
+`AgentToolBridge` 把 `McpManager` 聚合的全部工具以本地 HTTP 暴露给 Python sidecar：
+
+| 端点 | 说明 |
+|---|---|
+| `GET /tools` | 返回 `{"tools":[{"name","description","parameters"}]}` |
+| `POST /tools/invoke` | 请求 `{"name","args"}`，返回 `{"content","is_error"}` |
+
+只监听 `127.0.0.1`，随机端口 + 随机令牌（`X-Agent-Token`）。
+因此**新增 MCP 工具会自动出现在 Python Agent 的工具列表里**，无需改 Python 代码。
+
 
 ### 接入真实 MCP 服务器
 

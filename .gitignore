@@ -10,6 +10,18 @@ TestResults/
 *.trx
 [Cc]overage/
 
+# ===== Python（uv 管理的虚拟环境与缓存）=====
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# ===== 外部参考项目 =====
+# DeskTop-helper 是 HelloClaw 的只读参考副本（不参与构建，不被 agent/ import），
+# 属于第三方代码，不随本仓库分发。
+DeskTop-helper/
+
 # ===== 用户数据（运行时生成，不入库）=====
 # 日志、待办数据库、用户档案、对话记录
 user_data/

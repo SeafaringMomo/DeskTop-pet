@@ -42,7 +42,37 @@ window:
 
 ## secrets.yaml
 
-复制 `config/secrets.yaml.example` 创建，存放 `ai_providers` 与 `mcp_servers`。该文件不入库、不入日志。
+复制 `config/secrets.yaml.example` 创建，存放 `ai_providers`、`mcp_servers` 与 `agent`。该文件不入库、不入日志。
+
+### agent 块（Python Agent sidecar）
+
+```yaml
+agent:
+  enabled: true                # false = 完全关闭 Python Agent（回退纯 C# 链路）
+  auto_start: true             # 应用启动时自动拉起 sidecar
+  python_path: ""              # 空 = 自动探测 <项目根>/.venv
+  workspace_root: ""           # 空 = <用户目录>/agent_workspace，支持 {user} 占位
+  max_tool_iterations: 8       # 单轮最多工具往返次数
+  request_timeout_seconds: 120 # 健康检查与单次请求超时
+  enable_exec: false           # 是否允许 exec_run 工具（默认关闭）
+  log_level: INFO
+  brave_api_key: ""            # 启用 web_search 时填写
+```
+
+| 字段 | 类型 | 默认 | 说明 |
+|---|---|---|---|
+| `enabled` | bool | true | 总开关；false 时不启动 sidecar、不注册 `python-agent` |
+| `auto_start` | bool | true | false 时保留 Provider 但不自动拉起（供手动启动调试） |
+| `python_path` | string | "" | 显式指定解释器；优先级高于自动探测 |
+| `workspace_root` | string | "" | 人格/记忆文件根目录，按用户隔离 |
+| `max_tool_iterations` | int | 8 | 防止模型无限调用工具 |
+| `request_timeout_seconds` | int | 120 | 同时用于健康检查上限（至少 5 秒） |
+| `enable_exec` | bool | false | 开启后 `exec_run` 仅允许白名单命令 |
+| `log_level` | string | INFO | 传给 Python 日志级别 |
+| `brave_api_key` | string | "" | 为空则不注册 `web_search` |
+
+> `brave_api_key` 与 `ai_providers[].api_key` 一样**禁止写日志**。
+> sidecar 复用 `ai_providers` 中第一个启用的 `openai-compatible` 的模型与密钥，无需重复配置。
 
 ## theme.yaml（角色目录）
 

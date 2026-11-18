@@ -22,6 +22,7 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <!-- 标题栏：主色渐变背景，可拖动，右侧两个按钮（模型设置/关闭） -->
@@ -80,8 +81,17 @@
                          CaretBrush="#F5D547" />
             </Border>
 
+            <!-- 状态行：显示工具调用进度（流式时可见，闲置时折叠） -->
+            <TextBlock Grid.Row="2" x:Name="StatusText"
+                       Margin="6,2,6,0"
+                       Text=""
+                       Visibility="Collapsed"
+                       FontFamily="Microsoft YaHei UI" FontSize="11"
+                       TextTrimming="CharacterEllipsis"
+                       Foreground="#FFF3D9" />
+
             <!-- 输入区：输入框 + 麦克风按钮 -->
-            <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,6,0,0">
+            <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,6,0,0">
                 <TextBox x:Name="InputBox"
                          Width="282" Height="30"
                          Background="#F25C3A1E"

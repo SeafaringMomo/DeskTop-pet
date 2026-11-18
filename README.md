@@ -11,9 +11,10 @@
 - **角色导入**：托盘菜单 → 设置 → 「导入助手角色」，选择含 `theme.yaml` 的文件夹复制到 `static/`，无需重启即可切换。
 - **助手管理**：商店（金币充值 + 食物购买）、互动（好感度）、喂食（饱食度）、状态（总览）。
 - **养成系统**：好感度等级影响 AI 对话风格；饱食度、金币、好感度、背包存于用户档案。
-- **AI 对话**：通用 Provider 接口，支持本地 `local-klee` 与 `openai-compatible`；聊天历史持久化。
-- **MCP 能力**：预留 `local` / `stdio` / `sse` 三种传输类型，内置 `local-todo` 待办工具。
-- **多用户隔离**：`user_data/users/<name>/` 下独立保存档案、聊天记录与待办数据库。
+- **AI 对话**：通用 Provider 接口，支持本地 `local-klee`、`openai-compatible` 与 **`python-agent`（流式）**；聊天历史持久化。
+- **Python Agent（混合开发）**：C# 负责 UI、养成与持久化，Python sidecar 负责 Agent 推理——流式逐字输出、工具调用闭环、长期/每日记忆、人格文件。
+- **MCP 能力**：`local` / `stdio` / `sse` 三种传输类型，内置 `local-todo` 待办工具；待办能力同时经**工具桥**反向暴露给 Python Agent。
+- **多用户隔离**：`user_data/users/<name>/` 下独立保存档案、聊天记录、待办数据库与 Agent 工作空间。
 - **运维能力**：单实例检测、全局异常兜底、开机自启、用户档案 ZIP 导入导出、日志按天滚动。
 
 ## 目录结构
@@ -31,9 +32,12 @@ DesktopGent/
 ├── Models/                      # 配置、档案、食物、待办等模型
 ├── Services/
 │   ├── Core/                    # Config/User/Affinity/Feed/Interaction/Mood/Logger 等
-│   ├── AI/                      # AI Provider 与聊天编排
+│   ├── AI/                      # AI Provider、聊天编排、Agent sidecar 守护、工具桥、SSE
 │   ├── Data/                    # SQLite 仓库（待办、聊天历史）
 │   └── MCP/                     # MCP 服务器
+├── agent/                       # Python Agent 微服务（独立可运行，见 agent/README.md）
+│   ├── agent_service/           # domain / ports / core / adapters / tools / services / api
+│   └── tests/                   # pytest（70 个用例，不联网）
 ├── Windows/
 │   ├── Gent/                    # 桌面助手主窗口
 │   ├── GentManager/             # 助手管理窗口（商店/互动/喂食/状态）
@@ -115,9 +119,25 @@ border: "#F5D547"
 ## 开发
 
 ```bash
+# C# 主程序（Windows）
 dotnet build DesktopGent.csproj
 dotnet run --project DesktopGent.csproj
+
+# Python Agent（任意平台，首次需创建虚拟环境）
+uv venv --python 3.13 .venv
+UV_PROJECT_ENVIRONMENT=.venv uv sync --project agent --locked
+cd agent && ../.venv/bin/python -m pytest -q     # 70 个用例
+cd agent && ../.venv/bin/python -m ruff check agent_service tests
 ```
+
+### Python Agent 运行前提
+
+1. 项目根存在 `.venv`（`uv venv` + `uv pip install -e agent`）；
+2. `secrets.yaml` 中至少有一个**已启用**的 `openai-compatible` 提供方且填了 API Key；
+3. `secrets.yaml` 的 `agent.enabled` 为 true（默认）。
+
+满足后应用启动会自动拉起 sidecar 并切换默认提供方；任一前提不满足则**自动回退**到
+`local-klee` 或直连的 `openai-compatible`，不影响使用。详见 [agent/README.md](agent/README.md)。
 
 开发规则与易错点见 [AGENTS.md](AGENTS.md)。主要文档：
 
@@ -130,6 +150,8 @@ dotnet run --project DesktopGent.csproj
 | [docs/config配置.md](docs/config配置.md) | 配置模型与 role 扫描 |
 | [docs/日志.md](docs/日志.md) | 日志分类与规范 |
 | [docs/AI与MCP.md](docs/AI与MCP.md) | AI Provider 与 MCP |
+| [docs/Python-Agent.md](docs/Python-Agent.md) | Python Agent 侧车架构与运维 |
+| [docs/Python-Agent融合方案.md](docs/Python-Agent融合方案.md) | 融合方案（设计依据） |
 | [docs/待办.md](docs/待办.md) | 待办功能与 MCP 工具 |
 | [docs/聊天.md](docs/聊天.md) | 聊天窗口与历史 |
 
@@ -138,4 +160,4 @@ dotnet run --project DesktopGent.csproj
 - 更多动作目录约定（交互动作、状态动作），仍以 `static/` 帧文件夹驱动。
 - 角色「外观定制」：把角色配置做成可视化编辑器，生成 `theme.yaml` 与帧目录。
 - 商店扩充：食物种类、折扣活动、金币获得途径。
-- AI 增强：`tool_calls` 结构化历史支持，更多 MCP 工具。
+- AI 增强：会话摘要、记忆可视化编辑、更多 MCP 工具。
