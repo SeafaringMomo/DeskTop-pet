@@ -122,7 +122,11 @@ public sealed class OpenAiCompatibleProvider : IAiProvider
                     {
                         ["name"] = t.Name,
                         ["description"] = t.Description,
-                        ["parameters"] = t.ParametersSchema ?? new JsonObject { ["type"] = "object" }
+                        // 必须 DeepClone：ParametersSchema 由 MCP 服务器持有并在多轮请求间复用，
+                        // JsonNode 一旦挂到某个父节点上，第二次组包会抛
+                        // InvalidOperationException: The node already has a parent.
+                        ["parameters"] = t.ParametersSchema?.DeepClone()
+                            ?? new JsonObject { ["type"] = "object" }
                     }
                 });
             }
