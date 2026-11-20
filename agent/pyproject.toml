@@ -1,0 +1,31 @@
+[project]
+name = "desktop-gent-agent"
+version = "0.1.0"
+description = "DeskTopGent 的 Python Agent 微服务（hello-agents 工具层 + 自有可测试 Agent 循环）"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "hello-agents==1.0.1",
+    "openai>=1.40",
+    "fastapi>=0.109",
+    "uvicorn[standard]>=0.27",
+    "sse-starlette>=2.0",
+    "httpx[socks]>=0.28",
+    "python-dotenv>=1.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.6",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"

@@ -46,6 +46,71 @@ public sealed class ChatOrchestrator
     /// <summary>清空对话历史。</summary>
     public void ResetHistory() => _history.Clear();
 
+    /// <summary>从对话记录仓库恢复历史（用于「加载历史会话」）。</summary>
+    public void LoadHistory(IEnumerable<ChatMessage> messages)
+    {
+        _history.Clear();
+        _history.AddRange(messages);
+    }
+
+    /// <summary>
+    /// 流式对话：仅当默认提供方实现 <see cref="IStreamingAiProvider"/> 时可用。
+    ///
+    /// 与 <see cref="TalkAsync"/> 的分工：
+    /// - 本方法不执行 C# 侧工具循环（工具循环由 Python sidecar 内部完成）
+    /// - 调用方负责把 chunk 增量渲染到 UI，并在结束时落库 assistant 全文
+    /// - 历史由本类持有；工具调用过程消息不进入 C# 历史（Python 每轮已接收完整历史）
+    /// </summary>
+    /// <param name="userMessage">用户输入</param>
+    /// <param name="sessionId">C# 会话 ID</param>
+    /// <param name="ct">取消令牌</param>
+    public async IAsyncEnumerable<AgentEvent> TalkStreamAsync(
+        string userMessage,
+        string sessionId,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+    {
+        var provider = AiProviderRegistry.Instance.Default
+            ?? throw new InvalidOperationException("没有可用的 AI 提供方，请先注册一个。");
+        if (provider is not IStreamingAiProvider streaming)
+            throw new InvalidOperationException($"提供方 {provider.Name} 不支持流式对话");
+
+        var role = ConfigService.Load().Role;
+        var levelHint = "";
+        try { levelHint = AffinityService.Instance.GetSystemPromptHint(role); }
+        catch { /* 未登录时忽略 */ }
+
+        var request = new AiRequest
+        {
+            SystemPrompt = SystemPrompt,
+            History = _history.ToList(),
+            UserMessage = userMessage,
+            // 工具由 Python 侧执行，C# 不再下发 MCP 工具，避免双重执行
+            Tools = Array.Empty<ToolDefinition>(),
+            SessionId = sessionId,
+            User = UserService.Instance.CurrentUserName,
+            Role = role,
+            LevelHint = levelHint
+        };
+
+        _history.Add(new ChatMessage { Role = "user", Content = userMessage });
+
+        var finalText = "";
+        var errored = false;
+
+        await foreach (var ev in streaming
+            .ChatStreamAsync(request, sessionId, request.User ?? "", role, levelHint, ct)
+            .ConfigureAwait(false))
+        {
+            if (ev.Kind == "done") finalText = ev.FinalContent;
+            if (ev.Kind == "error") errored = true;
+            yield return ev;
+        }
+
+        // 只把成功的最终答复写入历史；失败不污染上下文
+        if (!errored && !string.IsNullOrEmpty(finalText))
+            _history.Add(new ChatMessage { Role = "assistant", Content = finalText });
+    }
+
     /// <summary>发送一条用户消息并返回最终回复。</summary>
     public async Task<string> TalkAsync(string userMessage, CancellationToken ct = default)
     {

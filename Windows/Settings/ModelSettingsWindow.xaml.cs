@@ -98,7 +98,9 @@ public partial class ModelSettingsWindow : Window
             items.Add(new ProviderItem
             {
                 Name = name,
-                DisplayName = name + (p?.SupportsToolCalling == true ? "  (支持工具调用)" : "  (纯对话)"),
+                DisplayName = name + (p?.SupportsToolCalling == true
+                    ? "  (支持工具调用)"
+                    : p is PythonAgentProvider ? "  (流式 Agent)" : "  (纯对话)"),
                 Description = Describe(p)
             });
         }
@@ -115,6 +117,8 @@ public partial class ModelSettingsWindow : Window
         if (p == null) return "未注册";
         if (p is OpenAiCompatibleProvider oai)
             return $"OpenAI 兼容：{oai.BaseUrl}，模型={oai.Model}";
+        if (p is PythonAgentProvider)
+            return $"Python Agent：记忆 + 流式工具调用（{(AgentSidecarService.Instance.IsReady ? "已就绪" : "未启动")}）";
         if (p is LocalKleeProvider)
             return "本地占位实现：关键词匹配，无需联网，主角名跟随配置";
         return p.GetType().Name;
@@ -132,10 +136,29 @@ public partial class ModelSettingsWindow : Window
         {
             Logger.Info("AI", $"切换默认 AI 提供方 -> {item.Name}");
             CurrentLabel.Text = $"当前默认提供方：{item.Name}";
-            // 持久化到用户档案
-            try { UserService.Instance.SaveCurrentProfile(); } catch { }
+            // 持久化到用户档案（此前只调用保存，却没写 DefaultProvider 字段，重启后丢失）
+            try
+            {
+                if (UserService.Instance.CurrentUser is { } profile)
+                {
+                    profile.DefaultProvider = item.Name;
+                    UserService.Instance.SaveCurrentProfile();
+                }
+            }
+            catch (Exception ex) { Logger.Warn("AI", $"保存默认提供方失败：{ex.Message}"); }
             // 同步 secrets.yaml 的默认 provider（如有需要可扩展）
             MessageBox.Show(this, $"已切换为 {item.Name}", "成功", MessageBoxButton.OK, MessageBoxImage.Information);
+
+            // sidecar 未就绪时选中会拖到「启动阶段回退」的同类问题：
+            // 首条消息必然报「未就绪」，这里提前告知而不是让用户自己猜
+            if (item.Name == "python-agent" && !AgentSidecarService.Instance.IsReady)
+            {
+                Logger.Warn("AI", "用户选择了 python-agent，但 sidecar 尚未就绪");
+                MessageBox.Show(this,
+                    "python-agent 的 sidecar 当前未就绪，发送消息会失败。\n" +
+                    "请检查 .venv、agent.enabled 与在线模型配置后重启应用。",
+                    "提示", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
         }
         else
         {

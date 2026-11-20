@@ -45,6 +45,20 @@ public sealed class AiRequest
 
     /// <summary>调用参数：温度、max_tokens 等，由各提供方自行解析。</summary>
     public IReadOnlyDictionary<string, object?>? Options { get; set; }
+
+    // ===== 流式 Agent 上下文（仅 PythonAgentProvider 使用，其余提供方可忽略）=====
+
+    /// <summary>C# 侧会话 ID（用于 Python 侧日志与事件回传）。</summary>
+    public string? SessionId { get; set; }
+
+    /// <summary>当前用户名。</summary>
+    public string? User { get; set; }
+
+    /// <summary>当前角色显示名。</summary>
+    public string? Role { get; set; }
+
+    /// <summary>好感度等级提示（由 AffinityService 提供）。</summary>
+    public string? LevelHint { get; set; }
 }
 
 /// <summary>对话响应。</summary>

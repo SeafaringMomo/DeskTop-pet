@@ -90,7 +90,8 @@ user_data/
 └── users/<name>/
     ├── profile.yaml              # 用户档案（偏好、好感度、饱食度、金币）
     ├── chat_history.db           # 该用户对话记录（SQLite）
-    └── todo.db                   # 该用户待办（SQLite）
+    ├── todo.db                   # 该用户待办（SQLite）
+    └── agent_workspace/          # Python Agent 工作空间（人格/记忆 Markdown）
 ```
 
 ### 4.2 硬规则
@@ -184,7 +185,7 @@ if (e.ClickCount >= 2)
 ### 7.1 Provider 注册规则
 - 从 `config/secrets.yaml` 的 `ai_providers` 加载，**支持 `enabled: false` 跳过**。
 - **兜底逻辑**：若无任何 provider 注册，回退到环境变量 `OPENAI_API_KEY`；仍无则注册 `LocalKleeProvider`。**禁止移除兜底**。
-- `type=local` 注册 `LocalKleeProvider`；`type=openai-compatible` 注册 `OpenAiCompatibleProvider`。新增 type 必须在 `RegisterAiProviders` 加分支。
+- `type=local` 注册 `LocalKleeProvider`；`type=openai-compatible` 注册 `OpenAiCompatibleProvider`；`type=python-agent` 注册 `PythonAgentProvider`。新增 type 必须在 `RegisterAiProviders` 加分支。
 
 ### 7.2 MCP 注册规则
 - 当前**仅实现 `local` 类型**，`stdio`/`sse` 为预留接口（记 Warn 跳过）。
@@ -193,6 +194,43 @@ if (e.ClickCount >= 2)
 
 ### 7.3 OpenAI 兼容接口已知限制
 - 历史消息只保存文本，未携带 `tool_calls` 结构化字段；连续多轮工具调用的第二次请求可能被严格服务拒绝。修改此限制需同时改 `ChatHistoryRepository` 表结构与 `ChatOrchestrator` 消息构造。
+- 走 `python-agent` 时不受此限制（Python 侧 `normalize_history` 会过滤不完整工具消息）。
+
+### 7.4 Python Agent（混合开发）规则
+架构与运维见 [docs/Python-Agent.md](docs/Python-Agent.md)，Python 侧规范见 [agent/README.md](agent/README.md)。
+
+**边界**
+- C# 是**领域数据的唯一写入方**（用户档案、待办、聊天历史）。Python 只写自己工作空间下的 Markdown。
+- 会话历史**不落 Python 侧**：由 C# 每轮随请求传入 `chat_history.db` 的内容。
+- Python 工作空间必须在 `CurrentUserDir` 下（默认 `user_data/users/<name>/agent_workspace`），禁止跨用户或写全局目录。
+- `SupportsToolCalling = false` 是有意为之：工具循环在 Python 内完成，C# **不得**再注入 MCP 工具（会重复执行）。
+- 工具桥只监听 `127.0.0.1`，随机端口 + 随机令牌，**令牌禁止写日志**。
+
+**启动与回退**
+- `agent.enabled=false` 时必须回到纯 C# 链路，这是唯一回滚开关，禁止删除。
+- sidecar 未就绪时**不得**让 `python-agent` 成为默认提供方（会在首条消息失败）。启动阶段显式回退，健康检查通过后再切换。
+- 退出时必须 `AgentSidecarService.Stop()` + `AgentToolBridge.Dispose()`（AGENTS.md §6.6），否则子进程变孤儿。
+
+**分层（禁止跨层依赖）**
+```
+api → services → core → ports ← adapters
+```
+- `core` **不得**导入 `openai` / `fastapi` / `httpx`，保持可用假实现单测。
+- 新增能力优先实现 port + adapter，不要在 core 里直接调第三方 SDK。
+
+**事件契约**
+- SSE 事件名与 `Services/AI/AgentEvent.cs` 一一对应，**改任一侧必须同步另一侧**。
+- 新增事件需同时更新：`domain/events.py`、`SseReader.Parse`、`ChatStreamAsync` 消费方、文档。
+
+**测试与检查**
+- 改 Python 必须 `pytest` 全绿 + `ruff check` 无错。
+- 测试**禁止联网**、禁止依赖 C# 进程（用 `tests/` 里的假实现或本地 HTTP 桩）。
+- 依赖变更后必须 `uv lock --project agent` 更新 `agent/uv.lock`（该文件入库）。
+
+**日志**
+- Python 统一写 stdout，由 `AgentSidecarService.PumpLogsAsync` 转发到应用日志（category=`Agent`）。
+- 禁止打印 API Key、令牌、完整记忆内容；长文本截断。
+
 
 ## 8. 角色与资源规则
 
@@ -240,12 +278,21 @@ static/<角色英文目录>/
 | 10 | 好感度重复扣 | 衰减后未更新 LastInteraction | 扣款后 `user.LastInteraction[role] = now` |
 | 11 | 饱食度恢复后仍扣好感 | SatietyLowSince 未清空 | 恢复时 `SatietyLowSince[role] = null` |
 | 12 | ChatHistoryWindow 绑定报错 | DisplayTime 只读属性 TwoWay 绑定 | 改用 OneWay 绑定 |
-| 13 | OpenAI 第二次工具调用被拒 | 历史消息缺 tool_calls 字段 | 已知限制，需改表结构 |
+| 13 | OpenAI 第二次工具调用被拒 | 历史消息缺 tool_calls 字段 | 已知限制，需改表结构；或改用 `python-agent` |
+| 14 | 首条消息报「sidecar 未就绪」 | `python-agent` 在健康检查前就被设为默认 | 启动阶段回退其他提供方，就绪后 `TrySetDefault` |
+| 15 | 应用退出后 Python 进程残留 | 未调 `Stop()` 或未杀进程树 | `OnExit` 调 `Kill(entireProcessTree:true)` |
+| 16 | 工具执行两次（重复加待办） | C# 又注入 MCP 工具 | `PythonAgentProvider.SupportsToolCalling=false`，工具循环只在 Python 侧 |
+| 17 | Python 读不到待办 | 工具桥未启动或令牌不一致 | 先 `AgentToolBridge.Start()` 再传地址+令牌给 sidecar |
+| 18 | 普通用户启动工具桥 Access Denied | 用了 `HttpListener` | 用 `TcpListener` 自实现 HTTP/1.1 |
+| 19 | sidecar 拉起的端口冲突 | 端口写死 | 用 `TcpListener(IPAddress.Loopback, 0)` 取空闲端口 |
+| 20 | 流式回答重复朗读 | chunk 阶段就调 TTS | 只在流结束（`done` 之后）调 `TTSService.Speak` 一次 |
+
 
 ## 11. 开发流程检查清单
 
 每个任务完成前确认：
 - [ ] `dotnet build` 0 错误 0 警告
+- [ ] 改 Python 时 `pytest` 全绿 + `ruff check` 无错
 - [ ] 新增用户操作有 Logger 记录
 - [ ] 新增配置字段走 §3.4 流程
 - [ ] 修改好感度数值走 §5.4 流程，不硬编码
@@ -257,6 +304,9 @@ static/<角色英文目录>/
 - [ ] 不引入硬编码颜色 / 数值 / 路径
 - [ ] 异常路径有 `Logger.Error(..., ex)`
 - [ ] 中文注释 + 中文日志消息
+- [ ] 改 SSE 事件名时两侧同步（Python `events.py` ↔ C# `AgentEvent.cs`）
+- [ ] Python `core` 层未引入第三方库
+- [ ] 依赖变更后更新 `agent/uv.lock`
 
 ## 12. 不应做的事
 
@@ -275,3 +325,9 @@ static/<角色英文目录>/
 - ❌ 移除 AI Provider / MCP 的兜底注册逻辑
 - ❌ 改 `logs/` 目录结构或日志文件命名格式
 - ❌ 用非 `NullNamingConvention` 的 YAML 命名约定
+- ❌ 让 Python 直接读写 C# 的 SQLite（必须经工具桥）
+- ❌ 在 sidecar 就绪前把 `python-agent` 设为默认提供方
+- ❌ 在 `SupportsToolCalling=false` 的 Python Agent 路径上注入 MCP 工具
+- ❌ 把 sidecar / 工具桥令牌或 API Key 写进日志
+- ❌ 让 `core` 层直接依赖 `openai` / `fastapi` / `httpx`
+

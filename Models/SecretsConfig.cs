@@ -17,6 +17,10 @@ public class SecretsConfig
     [YamlMember(Alias = "mcp_servers")]
     public List<McpServerConfig> McpServers { get; set; } = new();
 
+    /// <summary>Python Agent sidecar 配置</summary>
+    [YamlMember(Alias = "agent")]
+    public AgentConfig Agent { get; set; } = new();
+
     /// <summary>查找指定名称的 AI 提供方配置。</summary>
     public AiProviderConfig? FindAiProvider(string name)
         => AiProviders.FirstOrDefault(p => p.Name == name);
@@ -28,7 +32,8 @@ public class SecretsConfig
 
 /// <summary>
 /// AI 提供方配置。
-/// type=local：本地占位实现；type=openai-compatible：OpenAI 兼容 HTTP 服务。
+/// type=local：本地占位实现；type=openai-compatible：OpenAI 兼容 HTTP 服务；
+/// type=python-agent：转发到 Python sidecar（其使用 secrets 中第一个启用的 openai-compatible 配置）。
 /// </summary>
 public class AiProviderConfig
 {
@@ -90,4 +95,51 @@ public class McpServerConfig
     /// <summary>sse 类型：服务器 URL</summary>
     [YamlMember(Alias = "url")]
     public string? Url { get; set; }
+}
+
+/// <summary>
+/// Python Agent sidecar 配置，对应 secrets.yaml 的 agent 块。
+///
+/// 说明：
+/// - 该块不存放模型密钥；sidecar 的 LLM 配置复用 secrets 中第一个启用的
+///   openai-compatible 提供方（由 App 启动时注入环境变量）
+/// - python_path 为空时自动探测 &lt;BaseDir&gt;/.venv 下的解释器
+/// </summary>
+public class AgentConfig
+{
+    /// <summary>是否启用 Python Agent</summary>
+    [YamlMember(Alias = "enabled")]
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>是否随应用自动启动 sidecar</summary>
+    [YamlMember(Alias = "auto_start")]
+    public bool AutoStart { get; set; } = true;
+
+    /// <summary>Python 解释器路径（空=自动探测 .venv）</summary>
+    [YamlMember(Alias = "python_path")]
+    public string PythonPath { get; set; } = "";
+
+    /// <summary>工作空间根目录（空=&lt;CurrentUserDir&gt;/agent_workspace；支持 {user} 占位）</summary>
+    [YamlMember(Alias = "workspace_root")]
+    public string WorkspaceRoot { get; set; } = "";
+
+    /// <summary>单次对话允许的最大工具调用轮数</summary>
+    [YamlMember(Alias = "max_tool_iterations")]
+    public int MaxToolIterations { get; set; } = 8;
+
+    /// <summary>请求/健康检查超时（秒）</summary>
+    [YamlMember(Alias = "request_timeout_seconds")]
+    public int RequestTimeoutSeconds { get; set; } = 120;
+
+    /// <summary>是否启用命令执行工具（默认关闭）</summary>
+    [YamlMember(Alias = "enable_exec")]
+    public bool EnableExec { get; set; }
+
+    /// <summary>Python 侧日志级别（DEBUG/INFO/WARNING/ERROR）</summary>
+    [YamlMember(Alias = "log_level")]
+    public string LogLevel { get; set; } = "INFO";
+
+    /// <summary>Brave 搜索 API Key（可选，敏感）</summary>
+    [YamlMember(Alias = "brave_api_key")]
+    public string BraveApiKey { get; set; } = "";
 }
