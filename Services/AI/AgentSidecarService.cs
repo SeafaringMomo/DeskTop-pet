@@ -91,7 +91,7 @@ public sealed class AgentSidecarService : IDisposable
         var python = ResolvePython(agent.PythonPath);
         if (python == null)
         {
-            Logger.Warn("Agent", "未找到 Python 解释器（期望 <BaseDir>/.venv/Scripts/python.exe），请先执行 uv sync");
+            Logger.Warn("Agent", "未找到 Python 解释器（<BaseDir>/.venv 需在当前系统执行 uv sync），sidecar 不启动");
             return false;
         }
 
@@ -310,19 +310,26 @@ public sealed class AgentSidecarService : IDisposable
         catch { /* 进程退出时流会关闭 */ }
     }
 
-    /// <summary>探测 Python 解释器：优先 .venv，其次 PATH 中的 python。</summary>
+    /// <summary>探测当前平台的 Python 解释器（&lt;BaseDir&gt;/.venv）。</summary>
     private static string? ResolvePython(string configured)
     {
         if (!string.IsNullOrWhiteSpace(configured) && File.Exists(configured))
             return configured;
 
-        var candidates = new[]
+        var venv = Path.Combine(App.BaseDir, ".venv");
+        // 只探测当前平台的解释器布局：在 Windows 上执行 .venv/bin/python（Linux 符号链接）
+        // 会抛 Win32Exception「不是有效的应用程序」，Linux 执行 python.exe 同理
+        var candidate = OperatingSystem.IsWindows()
+            ? Path.Combine(venv, "Scripts", "python.exe")
+            : Path.Combine(venv, "bin", "python");
+        if (File.Exists(candidate)) return candidate;
+
+        // .venv 存在但没有本平台解释器：通常是跨平台拷贝/同步导致的布局不匹配
+        if (Directory.Exists(venv))
         {
-            Path.Combine(App.BaseDir, ".venv", "Scripts", "python.exe"),  // Windows
-            Path.Combine(App.BaseDir, ".venv", "bin", "python")           // Linux/macOS（开发环境）
-        };
-        foreach (var c in candidates)
-            if (File.Exists(c)) return c;
+            Logger.Warn("Agent",
+                $".venv 不是当前平台的虚拟环境（缺少 {candidate}），请在当前系统重新执行 uv sync 后再启动");
+        }
         return null;
     }
 

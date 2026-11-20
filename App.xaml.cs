@@ -369,6 +369,12 @@ public partial class App : Application
                     Logger.Warn("App", $"跳过 AI 提供商 {p.Name}：api_key 为空");
                     continue;
                 }
+                if (string.IsNullOrWhiteSpace(p.BaseUrl))
+                {
+                    // 空 base_url 会让请求打到 "/chat/completions"，报错难排查
+                    Logger.Warn("App", $"跳过 AI 提供商 {p.Name}：base_url 为空");
+                    continue;
+                }
                 registry.Register(new OpenAiCompatibleProvider
                 {
                     Name = p.Name,
